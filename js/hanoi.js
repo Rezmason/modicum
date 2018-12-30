@@ -7,6 +7,7 @@ var modicum;
 var program;
 var camera;
 var scene;
+var base;
 var ringContainer;
 var rings;
 var numActiveRings;
@@ -35,16 +36,22 @@ function onReady() {
     scene.setUniforms({
         uColorPalette:[
             0.07, 0.07, 0.07,
-            0.36, 0.50, 0.60,
-            1.00, 1.00, 1.00,
+            // 0.36, 0.53, 0.63,
+            0.35, 0.32, 0.78,
             0.93, 0.45, 0.07,
+            1.00, 1.00, 1.00,
         ]
     });
 
     rings = [];
     ringContainer = new SceneNode();
     ringContainer.transform = new Transform();
-    
+    ringContainer.transform.scaleX = 0;
+    ringContainer.transform.scaleY = 0;
+    base = new SceneNode();
+    base.transform = new Transform();
+    base.addChild(ringContainer);
+
     hanoiItr = 0;
     animTime = 0;
     ringIndex = 0;
@@ -65,12 +72,12 @@ function resize() {
     mat3.scale(camera, camera, [2 / canvas.width, 2 / canvas.height]);
     scene.setUniforms({uCamera:camera});
 
-    ringContainer.transform.x = canvas.width / 2;
-    ringContainer.transform.y = canvas.height / 2;
+    base.transform.x = canvas.width / 2;
+    base.transform.y = canvas.height / 2;
+    base.transform.scaleX = Math.min(canvas.width, canvas.height);
+    base.transform.scaleY = base.transform.scaleX;
 
     modicum.resize();
-    modicum.clear();
-    drawNode(ringContainer);
 }
 
 // It's the ruler function: https://oeis.org/A001511
@@ -82,7 +89,7 @@ function getRingIndex(t) {
 }
 
 function animate(time) {
-    var delta = ((lastTime != null) ? delta = time - lastTime : 0) / 1000;
+    var delta = ((lastTime != null) ? time - lastTime : 0) / 1000;
     lastTime = time;
     var speed = Math.pow(1.25, rings.length + 1) / (ringIndex + 1);
     animTime += delta * speed;
@@ -91,6 +98,8 @@ function animate(time) {
         if (currentRing != null) {
             currentRing.transform.rotation = ringEndAngle % TWO_PI;
             currentRing.transform.alpha = 1;
+            ringContainer.transform.scaleY = endScale;
+            ringContainer.transform.scaleX = endScale;
         }
         currentRing = null;
     }
@@ -104,16 +113,16 @@ function animate(time) {
             ring.transform.alpha = 0;
             rings.push(ring);
         }
-        
+
         startScale = ringContainer.transform.scaleX;
-        endScale = 600 / (2 * rings[rings.length - 1].radius);
+        endScale = 0.7 / (2 * rings[rings.length - 1].radius);
         currentRing = rings[ringIndex];
         ringStartAlpha = currentRing.transform.alpha;
         ringEndAlpha = 1;
         ringStartAngle = currentRing.transform.rotation;
         ringEndAngle = ringStartAngle + (ringIndex % 2 == 1 ? 1 : -1) * TWO_PI / 3;
     }
-    
+
     var ratio = easeInOutQuad(0, animTime, 0, 1, 1);
     if (currentRing != null) {
         currentRing.transform.rotation = (1 - ratio) * ringStartAngle + ratio * ringEndAngle;
@@ -125,9 +134,9 @@ function animate(time) {
         ringContainer.transform.scaleY = scale;
         ringContainer.transform.scaleX = scale;
     }
-    
+
     modicum.clear();
-    drawNode(ringContainer);
+    drawNode(base);
 
     window.requestAnimationFrame(animate);
 }
