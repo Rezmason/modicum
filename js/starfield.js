@@ -7,22 +7,25 @@ import AudioAnalyser from "./audioanalyser.js";
 import { colorTemperature2rgb } from "./../lib/color-temperature.js";
 const { mat4, mat2, vec3 } = glMatrix;
 
-const makeStarColor = () => {
-  const temperature = Math.pow(Math.random(), 2) * 10000;
+const makeStarColor = val => {
+  const temperature = Math.pow(val, 2) * 100000;
   const starColor = colorTemperature2rgb(temperature);
   return [starColor.red / 0xff, starColor.green / 0xff, starColor.blue / 0xff];
 };
 
 document.body.onload = async () => {
+  const audioAnalyser = new AudioAnalyser("./../assets/09 New Lands.wav");
+
   const starSize = 0.007;
   const numStars = 100;
-  const numMeshes = 100;
+  const numMeshes = audioAnalyser.binCount;
   const zSpeed = 0.1;
   const turnSpeed = 0.0;
   const starAngleDeg = 0;
 
   const canvas = document.createElement("canvas");
   document.body.appendChild(canvas);
+
   const modicum = new Modicum(canvas);
   modicum.tweak(gl => {
     gl.enable(gl.BLEND);
@@ -48,6 +51,8 @@ document.body.onload = async () => {
     uMouse: mouseTransform,
     uTransform: transform,
     uStarTransform: starTransform,
+    uMinDecibels: [audioAnalyser.minDecibels],
+    uMaxDecibels: [audioAnalyser.maxDecibels],
     uColor: [1, 1, 1]
   });
 
@@ -60,13 +65,14 @@ document.body.onload = async () => {
   const starVertexIDs = Array(verticesPerStar * numStars)
     .fill()
     .map((_, i) => i);
+  const starMeshIDs = Array(verticesPerStar * numStars);
   const starIndices = Array(numStars)
     .fill()
     .map((_, i) => starIndexTemplate.map(index => index + i * verticesPerStar));
 
   const meshes = Array(numMeshes)
     .fill()
-    .map(() => {
+    .map((_, meshID) => {
       const starPositions = Array(numStars)
         .fill()
         .map(() => {
@@ -92,9 +98,10 @@ document.body.onload = async () => {
       starMesh.setVertex(0, {
         aPos: starVertexPositions.flat(2),
         aSize: starVertexSizes.flat(2),
-        aVertexID: starVertexIDs
+        aVertexID: starVertexIDs,
+        aMeshID: starMeshIDs.fill(meshID)
       });
-      const starColor = makeStarColor();
+      const starColor = makeStarColor(meshID / audioAnalyser.binCount);
       starMesh.setUniforms({ uColor: starColor });
       starMesh.setIndex(0, starIndices.flat(2));
       starMesh.update();
@@ -105,7 +112,6 @@ document.body.onload = async () => {
 
   let z = 0;
   let lastTime = 0;
-  let volume = 0;
 
   const resize = () => {
     canvas.width = canvas.clientWidth;
@@ -117,24 +123,12 @@ document.body.onload = async () => {
     redraw();
   };
 
-  const audioAnalyser = new AudioAnalyser("./../assets/09 New Lands.wav");
-
   const animate = time => {
     const delta = (time - lastTime) / 1000;
     lastTime = time;
     z += delta * zSpeed;
     mat4.rotateZ(transform, transform, delta * Math.PI * 2 * turnSpeed);
     audioAnalyser.update();
-
-    const audioData = audioAnalyser.data;
-    const length = audioData.length;
-    let count = 0;
-    const total = length * 0xff;
-    for (let i = 0; i < length; i++) {
-      count += audioData[i];
-    }
-    volume = ((count / total) * 2.0) ** 4 * 10;
-
     redraw();
     window.requestAnimationFrame(animate);
   };
@@ -143,7 +137,7 @@ document.body.onload = async () => {
     modicum.clear();
     scene.setUniforms({
       uZ: [z],
-      uVolume: [volume],
+      uDecibels: audioAnalyser.data,
       uTransform: transform
     });
     meshes.forEach(mesh => program.drawMesh(mesh, scene));

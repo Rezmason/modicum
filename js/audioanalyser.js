@@ -83,19 +83,16 @@ export default class AudioAnalyser {
   constructor(path) {
     this.path = path;
     this.playing = false;
+    this.binCount = 2 ** 7;
+    this.minDecibels = -100;
+    this.maxDecibels = -30;
+    this.data = Float32Array.from(Array(this.binCount).fill(this.minDecibels));
   }
 
   update() {
-    if (this.analyserData != null) {
-      this.analyser.getByteFrequencyData(this.analyserData);
-    }
-  }
-
-  get data() {
     if (this.analyser != null) {
-      return this.analyserData;
+      this.analyser.getFloatFrequencyData(this.data);
     }
-    return [0];
   }
 
   stop() {
@@ -114,8 +111,11 @@ export default class AudioAnalyser {
     if (this.scheme == null) {
       const audioContext = new AudioContext();
       this.analyser = audioContext.createAnalyser();
+      this.analyser.fftSize = this.binCount * 2;
+      this.analyser.minDecibels = this.minDecibels;
+      this.analyser.maxDecibels = this.maxDecibels;
+      this.analyser.smoothingTimeConstant = 0.5;
       this.analyser.connect(audioContext.destination);
-      this.analyserData = new Uint8Array(this.analyser.frequencyBinCount);
       this.scheme = (async () => {
         try {
           return await fromMediaElement(audioContext, this.analyser, this.path);
