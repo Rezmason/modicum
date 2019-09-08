@@ -2,6 +2,46 @@
 // @author Jeremy Sachs
 // @version 2.0.0
 
+const createFormat = (gl, formatName) => {
+  const isFloat = formatName.endsWith("fv");
+  const isMat = formatName.includes("Matrix");
+  const count = parseInt(formatName.charAt(formatName.length - 3));
+
+  const typeName =
+    (isFloat ? "FLOAT" : "INT") +
+    (count == 1 ? "" : `_${isMat ? "MAT" : "VEC"}${count.toString()}`);
+  const type = gl[typeName];
+  const pointerType = isFloat ? gl.FLOAT : gl.INT;
+  const bType = isFloat ? Float32Array : Int32Array;
+  const stride = isMat ? count ** 2 : count;
+  const assign = isMat
+    ? (l, v) => gl[formatName](l, false, v)
+    : (l, v) => gl[formatName](l, v);
+  return [
+    type,
+    {
+      pointerType,
+      bType,
+      stride,
+      assign
+    }
+  ];
+};
+
+const uniformFormats = [
+  "uniform1fv",
+  "uniform2fv",
+  "uniform3fv",
+  "uniform4fv",
+  "uniform1iv",
+  "uniform2iv",
+  "uniform3iv",
+  "uniform4iv",
+  "uniformMatrix2fv",
+  "uniformMatrix3fv",
+  "uniformMatrix4fv"
+];
+
 class Modicum {
   constructor(canvas) {
     this.canvas = canvas;
@@ -18,25 +58,13 @@ class Modicum {
     gl.clear(gl.COLOR_BUFFER_BIT);
     gl.colorMask(true, true, true, false);
 
-    const flattenMatFunc = func => (loc, mat) => func(loc, false, mat);
-    const floatTypes = { type: gl.FLOAT, bType: Float32Array };
-    const intTypes = { type: gl.FLOAT, bType: Int32Array };
+    this.formats = Object.fromEntries(
+      uniformFormats.map(formatName => createFormat(gl, formatName))
+    );
+  }
 
-    this.formats = {
-      [gl.FLOAT     ]: { ...floatTypes, stride: 1, assign: gl.uniform1fv.bind(gl)},
-      [gl.FLOAT_VEC2]: { ...floatTypes, stride: 2, assign: gl.uniform2fv.bind(gl)},
-      [gl.FLOAT_VEC3]: { ...floatTypes, stride: 3, assign: gl.uniform3fv.bind(gl)},
-      [gl.FLOAT_VEC4]: { ...floatTypes, stride: 4, assign: gl.uniform4fv.bind(gl)},
-
-      [gl.INT     ]: { ...intTypes, stride: 1, assign: gl.uniform1iv.bind(gl)},
-      [gl.INT_VEC2]: { ...intTypes, stride: 2, assign: gl.uniform2iv.bind(gl)},
-      [gl.INT_VEC3]: { ...intTypes, stride: 3, assign: gl.uniform3iv.bind(gl)},
-      [gl.INT_VEC4]: { ...intTypes, stride: 4, assign: gl.uniform4iv.bind(gl)},
-
-      [gl.FLOAT_MAT2]: { ...floatTypes, stride: 2 ** 2, assign: flattenMatFunc(gl.uniformMatrix2fv.bind(gl))},
-      [gl.FLOAT_MAT3]: { ...floatTypes, stride: 3 ** 2, assign: flattenMatFunc(gl.uniformMatrix3fv.bind(gl))},
-      [gl.FLOAT_MAT4]: { ...floatTypes, stride: 4 ** 2, assign: flattenMatFunc(gl.uniformMatrix4fv.bind(gl))},
-    };
+  tweak(f) {
+    f(this.gl);
   }
 
   resize(width, height) {
@@ -52,50 +80,12 @@ class Modicum {
     this.gl.clear(this.gl.COLOR_BUFFER_BIT /* | this.gl.DEPTH_BUFFER_BIT*/);
   }
 
-  drawMesh(program, mesh, other) {
-    mesh.update();
-
-    if (other == null) other = mesh.uniformGroup;
-    Object.entries(program.uniformData).forEach(([propName, datum]) =>
-      datum.format.assign(
-        datum.location,
-        (propName in mesh.uniformGroup.uniformsUsed ? mesh.uniformGroup : other)
-          .uniforms[propName]
-      )
-    );
-
-    Object.entries(program.attributeData).forEach(([propName, datum]) => {
-      this.gl.bindBuffer(
-        this.gl.ARRAY_BUFFER,
-        mesh.vertexBuffers[propName].buffer
-      );
-      const { stride, type } = datum.format;
-      this.gl.vertexAttribPointer(datum.index, stride, type, false, 0, 0);
-    });
-
-    this.gl.bindBuffer(this.gl.ELEMENT_ARRAY_BUFFER, mesh.indexBuffer.buffer);
-    this.gl.drawElements(
-      this.gl.TRIANGLES,
-      mesh.numIndices,
-      this.gl.UNSIGNED_SHORT,
-      0
-    );
-  }
-
   async makeProgram(vertURL, fragURL) {
     const [vertSource, fragSource] = await Promise.all([
       fetch(vertURL).then(response => response.text()),
       fetch(fragURL).then(response => response.text())
     ]);
     return new Program(this, vertURL, fragURL, vertSource, fragSource);
-  }
-
-  makeMesh(program, numVertices, numTriangles) {
-    return new Mesh(this, program, numVertices, numTriangles);
-  }
-
-  makeUniformGroup(program) {
-    return new UniformGroup(this, program);
   }
 
   makeIndexBuffer(numIndices) {
@@ -182,14 +172,46 @@ class Program {
 
   activate() {
     this.modicum.gl.useProgram(this.nativeProg);
-    for (let prop in this.attributeData)
+    for (const prop in this.attributeData)
       this.modicum.gl.enableVertexAttribArray(this.attributeData[prop].index);
   }
 
   deactivate() {
     this.modicum.gl.useProgram(null);
-    for (let prop in this.attributeData)
+    for (const prop in this.attributeData)
       this.modicum.gl.disableVertexAttribArray(this.attributeData[prop].index);
+  }
+
+  makeMesh(numVertices, numTriangles) {
+    return new Mesh(this.modicum, this, numVertices, numTriangles);
+  }
+
+  makeUniformGroup() {
+    return new UniformGroup(this.modicum, this);
+  }
+
+  drawMesh(mesh, other) {
+    mesh.update();
+
+    if (other == null) other = mesh.uniformGroup;
+    Object.entries(this.uniformData).forEach(([propName, datum]) =>
+      datum.format.assign(
+        datum.location,
+        (propName in mesh.uniformGroup.uniformsUsed ? mesh.uniformGroup : other)
+          .uniforms[propName]
+      )
+    );
+
+    const gl = this.modicum.gl;
+
+    Object.entries(this.attributeData).forEach(([propName, datum]) => {
+      gl.bindBuffer(gl.ARRAY_BUFFER, mesh.vertexBuffers[propName].buffer);
+      const { stride, pointerType } = datum.format;
+      gl.vertexAttribPointer(datum.index, stride, pointerType, false, 0, 0);
+    });
+
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, mesh.indexBuffer.buffer);
+    gl.drawElements(gl.TRIANGLES, mesh.numIndices, gl.UNSIGNED_SHORT, 0);
   }
 }
 
@@ -199,27 +221,33 @@ class Mesh {
     this.numVertices = numVertices;
     this.numTriangles = numTriangles;
     this.numIndices = numTriangles * 3;
-    this.uniformGroup = this.modicum.makeUniformGroup(program);
+    this.uniformGroup = program.makeUniformGroup();
     this.vertexBuffers = {};
-    for (let prop in program.attributeData) {
+    for (const prop in program.attributeData) {
       this.vertexBuffers[prop] = this.modicum.makeVertexBuffer(
         program.attributeData[prop].format,
         numVertices
       );
     }
     this.indexBuffer = this.modicum.makeIndexBuffer(this.numIndices);
-    this.setIndex = this.indexBuffer.setIndex.bind(this.indexBuffer);
-    this.setUniforms = this.uniformGroup.setUniforms.bind(this.uniformGroup);
   }
 
   setVertex(index, values) {
-    for (let prop in values)
+    for (const prop in values)
       this.vertexBuffers[prop].setVertex(index, values[prop]);
+  }
+
+  setIndex(index, values) {
+    this.indexBuffer.setIndex(index, values);
+  }
+
+  setUniforms(values) {
+    this.uniformGroup.setUniforms(values);
   }
 
   update() {
     this.indexBuffer.update();
-    for (let prop in this.vertexBuffers) this.vertexBuffers[prop].update();
+    for (const prop in this.vertexBuffers) this.vertexBuffers[prop].update();
   }
 }
 
@@ -228,7 +256,7 @@ class UniformGroup {
     this.modicum = modicum;
     this.uniforms = {};
     this.uniformsUsed = {};
-    for (let prop in program.uniformData) {
+    for (const prop in program.uniformData) {
       const uniformDatum = program.uniformData[prop];
       const format = uniformDatum.format;
       this.uniforms[prop] = new format.bType(uniformDatum.size * format.stride);
@@ -236,8 +264,11 @@ class UniformGroup {
   }
 
   setUniforms(values) {
-    for (let prop in values) {
+    for (const prop in values) {
       this.uniformsUsed[prop] = true;
+      if (this.uniforms[prop] == null) {
+        throw new Error(`No uniform named ${prop}.`);
+      }
       this.uniforms[prop].set(values[prop]);
     }
   }

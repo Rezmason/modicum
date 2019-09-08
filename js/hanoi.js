@@ -1,4 +1,8 @@
-// Hanoi Rings, by Jeremy Sachs, 2016, yessiree
+// @fileoverview Hanoi Rings - An eternal Tower of Hanoi solver, depicted as multicolored rings
+// @author Jeremy Sachs
+// @dedicatedTo my friend Alec McEachran, who likes to make this sort of thing
+// @version 2.0.0
+// @yessiree
 
 import Modicum from "./modicum.js";
 import SceneNode from "./scenenode.js";
@@ -26,16 +30,15 @@ document.body.onload = async () => {
     "shaders/simple.frag"
   );
 
-  const scene = modicum.makeUniformGroup(program);
+  const scene = program.makeUniformGroup();
   const camera = mat3.create();
   scene.setUniforms({
-    uColorPalette:[
-      0.07, 0.07, 0.07,
-      // 0.36, 0.53, 0.63,
-      0.35, 0.32, 0.78,
-      0.93, 0.45, 0.07,
-      1.00, 1.00, 1.00,
-    ]
+    uColorPalette: [
+      [0.07, 0.07, 0.07], // [0.36, 0.53, 0.63],
+      [0.35, 0.32, 0.78],
+      [0.93, 0.45, 0.07],
+      [1.0, 1.0, 1.0]
+    ].flat()
   });
 
   const rings = [];
@@ -46,6 +49,7 @@ document.body.onload = async () => {
   const base = new SceneNode();
   base.transform = new Transform();
   base.addChild(ringContainer);
+  program.activate();
 
   let hanoiItr = 0;
   let animTime = 0;
@@ -190,7 +194,7 @@ document.body.onload = async () => {
       .map((_, i) => [i, i + 1, i + 2])
       .flat();
 
-    const mesh = modicum.makeMesh(program, numVertices, numTriangles);
+    const mesh = program.makeMesh(numVertices, numTriangles);
     mesh.setVertex(0, { aShape: positions, aColor: colors });
     mesh.setIndex(0, indices);
     const transform = mat3.create();
@@ -219,7 +223,7 @@ document.body.onload = async () => {
           ? node.transform.alpha
           : node.transform.concatenatedAlpha;
       node.mesh.setUniforms({ uTransform: matrix, uAlpha: [alpha] });
-      modicum.drawMesh(program, node.mesh, scene);
+      program.drawMesh(node.mesh, scene);
     }
   };
 
@@ -229,7 +233,6 @@ document.body.onload = async () => {
     return (-c / 2) * (--t * (t - 2) - 1) + b;
   };
 
-  program.activate();
   resize();
   window.onresize = resize;
   animate(0);

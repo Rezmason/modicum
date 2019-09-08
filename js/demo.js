@@ -13,27 +13,25 @@ document.body.onload = async () => {
     "shaders/simple.frag"
   );
 
-  const scene = modicum.makeUniformGroup(program);
+  const scene = program.makeUniformGroup();
   const camera = mat3.create();
   scene.setUniforms({
-    uColorPalette:[
-    0, 0, 0,
-    1, 0, 0,
-    0, 1, 0,
-    0, 0, 1,
-    ],
-    uAlpha: [1.00]
+    uColorPalette: [0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1],
+    uAlpha: [1.0]
   });
 
-  const mesh1 = modicum.makeMesh(program, 6, 2);
-  mesh1.setVertex(0, {aShape: [  0,   0,   0, 480, 640,   0], aColor: [3, 3, 3]});
-  mesh1.setVertex(3, {aShape: [  0, 480, 640,   0, 640, 480], aColor: [1, 1, 1]});
+  const mesh1 = program.makeMesh(6, 2);
+  mesh1.setVertex(0, { aShape: [0, 0, 0, 480, 640, 0], aColor: [3, 3, 3] });
+  mesh1.setVertex(3, { aShape: [0, 480, 640, 0, 640, 480], aColor: [1, 1, 1] });
   mesh1.setIndex(0, [0, 1, 2, 3, 4, 5]);
   mesh1.setUniforms({ uTransform: mat3.create() });
   mesh1.update();
 
-  const mesh2 = modicum.makeMesh(program, 3, 1);
-  mesh2.setVertex(0, {aShape: [320, 100, 100, 480 - 100, 640 - 100, 480 - 100], aColor: [0, 0, 0]});
+  const mesh2 = program.makeMesh(3, 1);
+  mesh2.setVertex(0, {
+    aShape: [320, 100, 100, 480 - 100, 640 - 100, 480 - 100],
+    aColor: [0, 0, 0]
+  });
   mesh2.setIndex(0, [0, 1, 2]);
   mesh2.setUniforms({ uTransform: mat3.create() });
   mesh2.update();
@@ -65,9 +63,9 @@ document.body.onload = async () => {
   const redraw = () => {
     modicum.clear();
     scene.setUniforms({ uAlpha: [1.0] });
-    modicum.drawMesh(program, mesh1, scene);
+    program.drawMesh(mesh1, scene);
     scene.setUniforms({ uAlpha: [animatedAlpha] });
-    modicum.drawMesh(program, mesh2, scene);
+    program.drawMesh(mesh2, scene);
   };
 
   window.onresize = resize;
