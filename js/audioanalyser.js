@@ -86,11 +86,12 @@ export default class AudioAnalyser {
     this.binCount = 2 ** 7;
     this.minDecibels = -100;
     this.maxDecibels = -30;
-    this.data = Float32Array.from(Array(this.binCount).fill(this.minDecibels));
+    this.data = new Float32Array(this.binCount);
+    this.data.fill(this.minDecibels);
   }
 
   update() {
-    if (this.analyser != null) {
+    if (this.playing && this.analyser != null) {
       this.analyser.getFloatFrequencyData(this.data);
     }
   }
@@ -101,6 +102,7 @@ export default class AudioAnalyser {
     }
     this.playing = false;
     this.scheme.then(({ stop }) => stop());
+    this.data.fill(this.minDecibels);
   }
 
   play() {

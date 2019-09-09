@@ -5,12 +5,16 @@
 import Modicum from "./modicum.js";
 import AudioAnalyser from "./audioanalyser.js";
 import { colorTemperature2rgb } from "./../lib/color-temperature.js";
+import { rgbToHSV, hsvToRGB } from "./rgb_hsv.js";
 const { mat4, mat2, vec3 } = glMatrix;
 
 const makeStarColor = val => {
-  const temperature = Math.pow(val, 2) * 100000;
+  const temperature = Math.pow(val, 2) * 15000;
   const starColor = colorTemperature2rgb(temperature);
-  return [starColor.red / 0xff, starColor.green / 0xff, starColor.blue / 0xff];
+  const hsv = rgbToHSV(starColor);
+  hsv.s = hsv.s * 0.8 + 0.2;
+  const { r, g, b } = hsvToRGB(hsv);
+  return [r, g, b];
 };
 
 document.body.onload = async () => {
