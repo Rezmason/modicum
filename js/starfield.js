@@ -23,9 +23,15 @@ document.body.onload = async () => {
   const starSize = 0.007;
   const numStars = 100;
   const numMeshes = audioAnalyser.binCount;
-  const zSpeed = 0.1;
-  const turnSpeed = 0.0;
+  const zGoalSpeed = 0.1;
+  const turnSpeed = 0.3;
   const starAngleDeg = 0;
+
+  let zSpeed = 0.0;
+  let rotateX = 0.0;
+  let rotateY = 0.0;
+  let rotateXGoal = 0.0;
+  let rotateYGoal = 0.0;
 
   const canvas = document.createElement("canvas");
   document.body.appendChild(canvas);
@@ -131,8 +137,24 @@ document.body.onload = async () => {
     const delta = (time - lastTime) / 1000;
     lastTime = time;
     z += delta * zSpeed;
-    mat4.rotateZ(transform, transform, delta * Math.PI * 2 * turnSpeed);
+    mat4.rotateZ(
+      transform,
+      transform,
+      Math.PI * 2 * turnSpeed * delta * zSpeed
+    );
+    if (audioAnalyser.playing && zSpeed < zGoalSpeed) {
+      zSpeed = Math.min(zGoalSpeed, zSpeed + delta * 0.05);
+    } else if (!audioAnalyser.playing && zSpeed > 0) {
+      zSpeed = Math.max(0, zSpeed - delta * 0.08);
+    }
     audioAnalyser.update();
+
+    mat4.identity(mouseTransform);
+    mat4.rotateX(mouseTransform, mouseTransform, rotateX);
+    mat4.rotateY(mouseTransform, mouseTransform, rotateY);
+    rotateX = rotateX * 0.9 + rotateXGoal * 0.1;
+    rotateY = rotateY * 0.9 + rotateYGoal * 0.1;
+
     redraw();
     window.requestAnimationFrame(animate);
   };
@@ -142,26 +164,15 @@ document.body.onload = async () => {
     scene.setUniforms({
       uZ: [z],
       uDecibels: audioAnalyser.data,
-      uTransform: transform
+      uTransform: transform,
+      uMouse: mouseTransform
     });
     meshes.forEach(mesh => program.drawMesh(mesh, scene));
   };
 
   const mouseMove = ({ x, y }) => {
-    mat4.identity(mouseTransform);
-    mat4.rotateX(
-      mouseTransform,
-      mouseTransform,
-      Math.PI * 2 * (y / canvas.height - 0.5)
-    );
-    mat4.rotateY(
-      mouseTransform,
-      mouseTransform,
-      Math.PI * 2 * (x / canvas.width - 0.5)
-    );
-    scene.setUniforms({
-      uMouse: mouseTransform
-    });
+    rotateXGoal = Math.PI * 2 * (y / canvas.height - 0.5);
+    rotateYGoal = Math.PI * 2 * (x / canvas.width - 0.5);
   };
 
   resize();

@@ -93,6 +93,9 @@ export default class AudioAnalyser {
   update() {
     if (this.playing && this.analyser != null) {
       this.analyser.getFloatFrequencyData(this.data);
+      if (Math.abs(this.data[0]) === Infinity) {
+        this.data.fill(this.minDecibels);
+      }
     }
   }
 
