@@ -41,7 +41,7 @@ document.body.onload = async () => {
     gl.enable(gl.BLEND);
     gl.blendFunc(gl.SRC_ALPHA, gl.DST_ALPHA);
   });
-  const program = await modicum.makeProgram(
+  const program = await modicum.loadProgram(
     "shaders/starfield.vert",
     "shaders/starfield.frag"
   );

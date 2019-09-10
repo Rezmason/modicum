@@ -80,12 +80,20 @@ class Modicum {
     this.gl.clear(this.gl.COLOR_BUFFER_BIT /* | this.gl.DEPTH_BUFFER_BIT*/);
   }
 
-  async makeProgram(vertURL, fragURL) {
+  makeProgram(vertSource = null, fragSource = null) {
+    return new Program(this, vertSource, fragSource);
+  }
+
+  async loadProgram(vertURL = null, fragURL = null) {
     const [vertSource, fragSource] = await Promise.all([
-      fetch(vertURL).then(response => response.text()),
-      fetch(fragURL).then(response => response.text())
+      vertURL == null
+        ? Promise.resolve()
+        : fetch(vertURL).then(response => response.text()),
+      fragURL == null
+        ? Promise.resolve()
+        : fetch(fragURL).then(response => response.text())
     ]);
-    return new Program(this, vertURL, fragURL, vertSource, fragSource);
+    return new Program(this, vertSource, fragSource);
   }
 
   makeIndexBuffer(numIndices) {
@@ -109,11 +117,38 @@ const processShader = (gl, type, source) => {
   return shader;
 };
 
+const simpleVertSource = `
+attribute vec3 aPos;
+attribute vec3 aColor;
+uniform mat3 uTransform;
+uniform mat3 uCamera;
+varying vec3 vColor;
+void main(void) {
+  vColor = vec4(aColor, 1.0);
+  gl_Position = vec4(uCamera * uTransform * aPos, 1.0);
+}
+`;
+
+const simpleFragSource = `
+precision mediump float;
+varying vec4 vColor;
+void main(void) {
+  gl_FragColor = vColor;
+}
+`;
+
 class Program {
-  constructor(modicum, vertURL, fragURL, vertSource, fragSource) {
+  constructor(modicum, vertSource, fragSource) {
     this.modicum = modicum;
-    this.vertURL = vertURL;
-    this.fragURL = fragURL;
+
+    if (vertSource == null) {
+      vertSource = simpleVertSource;
+    }
+
+    if (fragSource == null) {
+      fragSource = simpleFragSource;
+    }
+
     this.vertSource = vertSource;
     this.fragSource = fragSource;
 

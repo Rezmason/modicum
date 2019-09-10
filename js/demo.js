@@ -8,10 +8,7 @@ document.body.onload = async () => {
   const canvas = document.createElement("canvas");
   document.body.appendChild(canvas);
   const modicum = new Modicum(canvas);
-  const program = await modicum.makeProgram(
-    "shaders/simple.vert",
-    "shaders/simple.frag"
-  );
+  const program = await modicum.loadProgram("shaders/flatshapes.vert");
 
   const scene = program.makeUniformGroup();
   const camera = mat3.create();

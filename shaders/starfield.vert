@@ -21,7 +21,7 @@ void main(void) {
     pos.z = (fract(pos.z + uZ) - 0.5) * 2.0;
     pos = uCamera * uMouse * uTransform * pos;
 
-    float volume = (uDecibels[int(aMeshID * 0.5)] - uMinDecibels) / (uMaxDecibels - uMinDecibels);
+    float volume = (uDecibels[int(aMeshID)] - uMinDecibels) / (uMaxDecibels - uMinDecibels);
     volume = pow(volume, 6.0) * 4.0;
 
     int cornerIndex = int(floor(fract(aVertexID / 3.0) * 3.0));
