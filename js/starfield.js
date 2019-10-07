@@ -17,8 +17,31 @@ const makeStarColor = val => {
   return [r, g, b];
 };
 
+const makeSongData = (title, artist, filename, credits) => ({
+  title,
+  artist,
+  filename,
+  credits: credits != null ? credits : `<strong>${title}</strong><br>${artist}`
+});
+
+const songData = {
+  newLands: makeSongData("New Lands", "Justice", "09 New Lands.wav"),
+  newDigitalWar: makeSongData(
+    "New Digital War",
+    "Groove Bakery",
+    "groove-bakery-new-digital-war.wav",
+    `
+    <strong>New Digital War by Groove Bakery</strong> <a href="https://groovebakery.com">groovebakery.com</a><br>
+    Music promoted by <a href="https://www.free-stock-music.com">free-stock-music.com</a><br>
+    <a href="https://creativecommons.org/licenses/by-nd/4.0/">Attribution-NoDerivatives 4.0 International (CC BY-ND 4.0)</a><br>
+    `
+  )
+};
+
+const song = songData.newDigitalWar;
+
 document.body.onload = async () => {
-  const audioAnalyser = new AudioAnalyser("./../assets/09 New Lands.wav");
+  const audioAnalyser = new AudioAnalyser(`./assets/${song.filename}`);
 
   const starSize = 0.007;
   const numStars = 100;
@@ -35,6 +58,15 @@ document.body.onload = async () => {
 
   const canvas = document.createElement("canvas");
   document.body.appendChild(canvas);
+
+  const credits = document.createElement("credits");
+  credits.innerHTML = song.credits;
+  credits.style.opacity = 0;
+  document.body.appendChild(credits);
+
+  const instructions = document.createElement("instructions");
+  instructions.innerHTML = "( click to begin )";
+  document.body.appendChild(instructions);
 
   const modicum = new Modicum(canvas);
   modicum.tweak(gl => {
@@ -63,7 +95,8 @@ document.body.onload = async () => {
     uStarTransform: starTransform,
     uMinDecibels: [audioAnalyser.minDecibels],
     uMaxDecibels: [audioAnalyser.maxDecibels],
-    uColor: [1, 1, 1]
+    uColor: [1, 1, 1],
+    uFreqScale: [0.5]
   });
 
   const verticesPerStar = 3;
@@ -183,8 +216,11 @@ document.body.onload = async () => {
   window.onclick = async () => {
     if (audioAnalyser.playing) {
       audioAnalyser.stop();
+      credits.style.opacity = 0;
     } else {
       audioAnalyser.play();
+      credits.style.opacity = 1;
+      instructions.style.opacity = 0;
     }
   };
 };

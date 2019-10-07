@@ -8,6 +8,7 @@ uniform vec2 uAspectRatio;
 uniform mat4 uCamera;
 uniform mat4 uTransform;
 uniform mat4 uMouse;
+uniform float uFreqScale;
 uniform float uDecibels[128];
 uniform float uMinDecibels;
 uniform float uMaxDecibels;
@@ -21,8 +22,8 @@ void main(void) {
     pos.z = (fract(pos.z + uZ) - 0.5) * 2.0;
     pos = uCamera * uMouse * uTransform * pos;
 
-    float volume = (uDecibels[int(aMeshID)] - uMinDecibels) / (uMaxDecibels - uMinDecibels);
-    volume = pow(volume, 6.0) * 4.0;
+    float volume = (uDecibels[int(aMeshID * uFreqScale)] - uMinDecibels) / (uMaxDecibels - uMinDecibels);
+    volume = pow(volume, 5.0) * 5.0;
 
     int cornerIndex = int(floor(fract(aVertexID / 3.0) * 3.0));
     vec2 uv = uCornerOffsets[cornerIndex];

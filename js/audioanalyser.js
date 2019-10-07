@@ -119,7 +119,7 @@ export default class AudioAnalyser {
       this.analyser.fftSize = this.binCount * 2;
       this.analyser.minDecibels = this.minDecibels;
       this.analyser.maxDecibels = this.maxDecibels;
-      this.analyser.smoothingTimeConstant = 0.5;
+      this.analyser.smoothingTimeConstant = 0.6;
       this.analyser.connect(audioContext.destination);
       this.scheme = (async () => {
         try {
