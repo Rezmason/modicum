@@ -3,9 +3,12 @@
 // @version 2.0.0
 
 export default class SceneNode {
-  constructor() {
+  constructor(properties) {
     this.children = [];
     this.parent = null;
+    for (let key in properties) {
+      this[key] = properties[key];
+    }
   }
 
   addChild(child, index) {
@@ -14,20 +17,24 @@ export default class SceneNode {
     }
     this.children.splice(index, 0, child);
     child.parent = this;
+    return this;
   }
 
   removeChild(child) {
     const index = this.children.indexOf(child);
     if (index != -1) this.removeChildAt(index);
+    return this;
   }
 
   removeChildAt(index) {
     this.children[index].parent = null;
     this.children.splice(index, 1);
+    return this;
   }
 
   removeChildren() {
     this.child.forEach(child => (child.parent = null));
     this.children.length = 0;
+    return this;
   }
 }

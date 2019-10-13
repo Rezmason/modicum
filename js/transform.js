@@ -19,24 +19,24 @@ export default class Transform {
     this.concatenatedAlpha = 1;
   }
 
-  update() {
+  update(other) {
     const matrix = this.matrix;
     mat3.identity(matrix);
     mat3.translate(matrix, matrix, [this.x, this.y]);
     mat3.scale(matrix, matrix, [this.scaleX, this.scaleY]);
     mat3.rotate(matrix, matrix, this.rotation);
-  }
 
-  updateConcat(other) {
-    mat3.multiply(
-      this.concatenatedMatrix,
-      other.concatenatedMatrix,
-      this.matrix
-    );
-    this.concatenatedAlpha = this.alpha * other.alpha;
-  }
-
-  resetConcat() {
-    mat3.copy(this.concatenatedMatrix, this.matrix);
+    if (other == null) {
+      mat3.copy(this.concatenatedMatrix, this.matrix);
+      this.concatenatedAlpha = this.alpha;
+    } else {
+      mat3.multiply(
+        this.concatenatedMatrix,
+        other.concatenatedMatrix,
+        this.matrix
+      );
+      this.concatenatedAlpha = this.alpha * other.concatenatedAlpha;
+    }
+    return this;
   }
 }

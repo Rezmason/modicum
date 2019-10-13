@@ -3,6 +3,11 @@
 // @version 2.0.0
 
 import Modicum from "./modicum.js";
+import {
+  makeResizer,
+  makeAnimator,
+  setAdditiveBlending
+} from "./modicumHelpers.js";
 import AudioAnalyser from "./audioanalyser.js";
 import { colorTemperature2rgb } from "./../lib/color-temperature.js";
 import { rgbToHSV, hsvToRGB } from "./rgb_hsv.js";
@@ -56,8 +61,8 @@ document.body.onload = async () => {
   let rotateXGoal = 0.0;
   let rotateYGoal = 0.0;
 
-  const canvas = document.createElement("canvas");
-  document.body.appendChild(canvas);
+  const modicum = new Modicum();
+  document.body.appendChild(modicum.canvas);
 
   const credits = document.createElement("credits");
   credits.innerHTML = song.credits;
@@ -68,11 +73,7 @@ document.body.onload = async () => {
   instructions.innerHTML = "( click to begin )";
   document.body.appendChild(instructions);
 
-  const modicum = new Modicum(canvas);
-  modicum.tweak(gl => {
-    gl.enable(gl.BLEND);
-    gl.blendFunc(gl.SRC_ALPHA, gl.DST_ALPHA);
-  });
+  setAdditiveBlending(modicum);
   const program = await modicum.loadProgram(
     "shaders/starfield.vert",
     "shaders/starfield.frag"
@@ -154,21 +155,15 @@ document.body.onload = async () => {
   program.activate();
 
   let z = 0;
-  let lastTime = 0;
 
-  const resize = () => {
-    canvas.width = canvas.clientWidth;
-    canvas.height = canvas.clientHeight;
-    const aspectRatio = canvas.clientWidth / canvas.clientHeight;
+  const resizer = makeResizer(modicum, (width, height) => {
+    const aspectRatio = width / height;
     mat4.perspective(camera, (Math.PI / 180) * 90, aspectRatio, 0.0001, 1000);
     scene.setUniforms({ uCamera: camera, uAspectRatio: [1 / aspectRatio, 1] });
-    modicum.resize();
     redraw();
-  };
+  });
 
-  const animate = time => {
-    const delta = (time - lastTime) / 1000;
-    lastTime = time;
+  const animator = makeAnimator((time, delta) => {
     z += delta * zSpeed;
     mat4.rotateZ(
       transform,
@@ -189,8 +184,7 @@ document.body.onload = async () => {
     rotateY = rotateY * 0.9 + rotateYGoal * 0.1;
 
     redraw();
-    window.requestAnimationFrame(animate);
-  };
+  });
 
   const redraw = () => {
     modicum.clear();
@@ -204,14 +198,15 @@ document.body.onload = async () => {
   };
 
   const mouseMove = ({ x, y }) => {
-    rotateXGoal = Math.PI * 2 * (y / canvas.height - 0.5);
-    rotateYGoal = Math.PI * 2 * (x / canvas.width - 0.5);
+    rotateXGoal = Math.PI * 2 * (y / modicum.height - 0.5);
+    rotateYGoal = Math.PI * 2 * (x / modicum.width - 0.5);
   };
 
-  resize();
-  window.onresize = resize;
+  window.onresize = resizer;
   window.onmousemove = mouseMove;
-  animate(0);
+
+  resizer();
+  animator.start();
 
   window.onclick = async () => {
     if (audioAnalyser.playing) {
