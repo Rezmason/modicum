@@ -5,5 +5,8 @@
   <link rel="stylesheet" type="text/css" href="style.css"/>
   <script src="lib/gl-matrix.js"></script>
   <script type="module" src="js/textures.js"></script>
+  <script type="module">
+    document.addEventListener('touchmove', e => e.preventDefault(), { passive: false });
+  </script>
 </head>
 </html>

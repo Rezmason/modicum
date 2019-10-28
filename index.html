@@ -6,5 +6,8 @@
   <!-- Dedicated to my friend Alec McEachran, who likes to make this sort of thing. -->
   <script src="lib/gl-matrix.js"></script>
   <script type="module" src="js/hanoi.js"></script>
+  <script type="module">
+    document.addEventListener('touchmove', e => e.preventDefault(), { passive: false });
+  </script>
 </head>
 </html>
