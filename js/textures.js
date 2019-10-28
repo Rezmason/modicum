@@ -8,6 +8,7 @@ const { vec3, mat4 } = glMatrix;
 document.body.onload = async () => {
   const modicum = new Modicum();
   document.body.appendChild(modicum.canvas);
+  await modicum.installTextures();
   const program = await modicum.loadProgram(
     "shaders/textured.vert",
     "shaders/textured.frag"
@@ -30,7 +31,7 @@ document.body.onload = async () => {
 
   program.activate();
 
-  const resizer = makeResizer(modicum, (width, height) => {
+  const { resize } = makeResizer(modicum, (width, height) => {
     const aspectRatio = width / height;
     mat4.perspective(camera, (Math.PI / 180) * 90, aspectRatio, 0.0001, 1000);
     mat4.translate(camera, camera, vec3.set(vec3.create(), 0, 0, -1));
@@ -49,7 +50,7 @@ document.body.onload = async () => {
     program.drawMesh(mesh, scene);
   };
 
-  window.onresize = resizer;
-  resizer();
+  window.onresize = resize;
+  resize();
   animator.start();
 };

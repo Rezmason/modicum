@@ -156,7 +156,7 @@ document.body.onload = async () => {
 
   let z = 0;
 
-  const resizer = makeResizer(modicum, (width, height) => {
+  const { resize } = makeResizer(modicum, (width, height) => {
     const aspectRatio = width / height;
     mat4.perspective(camera, (Math.PI / 180) * 90, aspectRatio, 0.0001, 1000);
     scene.setUniforms({ uCamera: camera, uAspectRatio: [1 / aspectRatio, 1] });
@@ -202,10 +202,10 @@ document.body.onload = async () => {
     rotateYGoal = Math.PI * 2 * (x / modicum.width - 0.5);
   };
 
-  window.onresize = resizer;
+  window.onresize = resize;
   window.onmousemove = mouseMove;
 
-  resizer();
+  resize();
   animator.start();
 
   window.onclick = async () => {

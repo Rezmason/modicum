@@ -2,9 +2,6 @@
 // @author Jeremy Sachs
 // @version 2.0.0
 
-const getParam = (o, name, defaultValue) =>
-  o == null || o[name] == null ? defaultValue : o[name];
-
 const createFormat = (gl, formatName) => {
   const isFloat = formatName.endsWith("fv");
   const isMat = formatName.includes("Matrix");
@@ -29,39 +26,7 @@ const createFormat = (gl, formatName) => {
   ];
 };
 
-const createSamplerFormat = (gl, formatName) => {
-  const typeName = `SAMPLER_${formatName
-    .split("sampler")
-    .pop()
-    .replace(/([a-z])([A-Z])/g, "$1_$2")
-    .toUpperCase()}`;
-  const type = gl[typeName];
-  return [
-    type,
-    {
-      create: data => {
-        let texture = null;
-        return {
-          get: () => texture,
-          set: v => (texture = v)
-        };
-      },
-      assign: (l, v, { textureIndexer }) => {
-        const texture = v.get();
-        const index = textureIndexer.currentIndex++;
-        gl.uniform1i(l, index);
-        gl.activeTexture(gl.TEXTURE0 + index);
-        if (texture == null) {
-          gl.bindTexture(gl.TEXTURE_2D, null);
-        } else {
-          texture.update();
-        }
-      }
-    }
-  ];
-};
-
-const uniformFormats = [
+const uniformFormatNames = [
   "uniform1fv",
   "uniform2fv",
   "uniform3fv",
@@ -75,18 +40,19 @@ const uniformFormats = [
   "uniformMatrix4fv"
 ];
 
-const samplerFormats = ["sampler2D"];
+const defaultParams = {
+  premultipliedAlpha: false,
+  antialias: true,
+  alpha: false
+};
 
 class Modicum {
-  constructor(canvas) {
+  constructor(canvas, params = {}) {
     if (canvas == null) {
       canvas = document.createElement("canvas");
     }
     this.canvas = canvas;
-    this.gl = canvas.getContext("webgl", {
-      premultipliedAlpha: false,
-      alpha: false
-    });
+    this.gl = canvas.getContext("webgl", { ...defaultParams, ...params });
     const gl = this.gl;
 
     gl.enable(gl.BLEND);
@@ -96,14 +62,9 @@ class Modicum {
     gl.clear(gl.COLOR_BUFFER_BIT);
     gl.colorMask(true, true, true, false);
 
-    this.formats = {
-      ...Object.fromEntries(
-        uniformFormats.map(formatName => createFormat(gl, formatName))
-      ),
-      ...Object.fromEntries(
-        samplerFormats.map(formatName => createSamplerFormat(gl, formatName))
-      )
-    };
+    this.formats = Object.fromEntries(
+      uniformFormatNames.map(formatName => createFormat(gl, formatName))
+    );
   }
 
   tweak(f) {
@@ -129,7 +90,7 @@ class Modicum {
   }
 
   makeProgram(vertSource = null, fragSource = null) {
-    return new Program(this, vertSource, fragSource);
+    return new Program(this.gl, this.formats, vertSource, fragSource);
   }
 
   async loadProgram(vertURL = null, fragURL = null) {
@@ -141,39 +102,22 @@ class Modicum {
         ? Promise.resolve()
         : fetch(fragURL).then(response => response.text())
     ]);
-    return new Program(this, vertSource, fragSource);
+    return new Program(this.gl, this.formats, vertSource, fragSource);
   }
 
-  makeTexture(width, height, data, params = null) {
-    return new Texture(this, width, height, data, params);
+  async makeTexture(width, height, data, params = null) {
+    await this.installTextures();
+    return new this.textures.Texture(this.gl, width, height, data, params);
   }
 
   async loadImageTexture(imageURL, params = null) {
-    const isFloat = getParam(params, "isFloat", false);
-    const numChannels = Math.min(4, getParam(params, "numChannels", 4));
-    const image = new Image();
-    image.src = imageURL;
-    await image.decode();
-    // createImageBitmap is not in Safari yet...
-    const canvas = document.createElement("canvas");
-    [canvas.width, canvas.height] = [image.width, image.height];
-    const ctx = canvas.getContext("2d");
-    ctx.drawImage(image, 0, 0);
-    const rawData = Array.from(
-      ctx.getImageData(0, 0, image.width, image.height).data
-    )
-      .map((value, index) => (index % 4 < numChannels ? value : null))
-      .filter(value => value != null);
-    const data = isFloat ? rawData.map(i => i / 0xff) : rawData;
-    return new Texture(this, image.width, image.height, data, params);
+    await this.installTextures();
+    return await this.textures.loadImageTexture(this.gl, imageURL, params);
   }
 
-  makeIndexBuffer(numIndices) {
-    return new IndexBuffer(this, numIndices);
-  }
-
-  makeVertexBuffer(format, numVertices) {
-    return new VertexBuffer(this, format, numVertices);
+  async installTextures() {
+    this.textures = await import("./modicumTextures.js");
+    Object.assign(this.formats, this.textures.createSamplerFormats(this));
   }
 }
 
@@ -210,8 +154,9 @@ void main(void) {
 `;
 
 class Program {
-  constructor(modicum, vertSource, fragSource) {
-    this.modicum = modicum;
+  constructor(gl, formats, vertSource, fragSource) {
+    this.gl = gl;
+    this.formats = formats;
 
     if (vertSource == null) {
       vertSource = simpleVertSource;
@@ -223,9 +168,6 @@ class Program {
 
     this.vertSource = vertSource;
     this.fragSource = fragSource;
-
-    const gl = this.modicum.gl;
-    const formats = this.modicum.formats;
 
     const nativeProg = gl.createProgram();
     this.nativeProg = nativeProg;
@@ -276,39 +218,39 @@ class Program {
   }
 
   destroy() {
-    if (this.modicum == null) {
+    if (this.gl == null) {
       return;
     }
     this.deactivate();
-    this.modicum.gl.deleteProgram(this.nativeProg);
-    this.modicum.gl.deleteShader(this.vertShader);
-    this.modicum.gl.deleteShader(this.fragShader);
+    this.gl.deleteProgram(this.nativeProg);
+    this.gl.deleteShader(this.vertShader);
+    this.gl.deleteShader(this.fragShader);
     this.nativeProg = null;
     this.vertShader = null;
     this.fragShader = null;
-    this.modicum = null;
+    this.gl = null;
   }
 
   activate() {
-    this.modicum.gl.useProgram(this.nativeProg);
+    this.gl.useProgram(this.nativeProg);
     for (const prop in this.attributeData)
-      this.modicum.gl.enableVertexAttribArray(this.attributeData[prop].index);
+      this.gl.enableVertexAttribArray(this.attributeData[prop].index);
     return this;
   }
 
   deactivate() {
-    this.modicum.gl.useProgram(null);
+    this.gl.useProgram(null);
     for (const prop in this.attributeData)
-      this.modicum.gl.disableVertexAttribArray(this.attributeData[prop].index);
+      this.gl.disableVertexAttribArray(this.attributeData[prop].index);
     return this;
   }
 
   makeMesh(numVertices, numTriangles) {
-    return new Mesh(this.modicum, this, numVertices, numTriangles);
+    return new Mesh(this.gl, this, numVertices, numTriangles);
   }
 
-  makeUniformGroup() {
-    return new UniformGroup(this.modicum, this);
+  makeUniformGroup(values = {}) {
+    return new UniformGroup(this.gl, this).setUniforms(values);
   }
 
   drawMesh(mesh, other) {
@@ -325,7 +267,7 @@ class Program {
       )
     );
 
-    const gl = this.modicum.gl;
+    const gl = this.gl;
 
     Object.entries(this.attributeData).forEach(([propName, datum]) => {
       gl.bindBuffer(gl.ARRAY_BUFFER, mesh.vertexBuffers[propName].buffer);
@@ -340,29 +282,29 @@ class Program {
 }
 
 class Mesh {
-  constructor(modicum, program, numVertices, numTriangles) {
-    this.modicum = modicum;
+  constructor(gl, program, numVertices, numTriangles) {
+    this.gl = gl;
     this.numVertices = numVertices;
     this.numTriangles = numTriangles;
     this.numIndices = numTriangles * 3;
     this.uniformGroup = program.makeUniformGroup();
     this.vertexBuffers = {};
     for (const prop in program.attributeData) {
-      this.vertexBuffers[prop] = this.modicum.makeVertexBuffer(
+      this.vertexBuffers[prop] = new VertexBuffer(
+        gl,
         program.attributeData[prop].format,
         numVertices
       );
     }
-    this.indexBuffer = this.modicum.makeIndexBuffer(this.numIndices);
+    this.indexBuffer = new IndexBuffer(gl, this.numIndices);
   }
 
   destroy() {
-    if (this.modicum == null) {
+    if (this.gl == null) {
       return;
     }
     this.uniformGroup.destroy();
-    for (const prop in values)
-      this.modicum.gl.destroyBuffer(this.vertexBuffers[prop]);
+    for (const prop in values) this.gl.destroyBuffer(this.vertexBuffers[prop]);
     this.indexBuffer.destroy();
   }
 
@@ -390,8 +332,8 @@ class Mesh {
 }
 
 class UniformGroup {
-  constructor(modicum, program) {
-    this.modicum = modicum;
+  constructor(gl, program) {
+    this.gl = gl;
     this.uniforms = {};
     this.uniformsUsed = {};
     for (const prop in program.uniformData) {
@@ -401,10 +343,10 @@ class UniformGroup {
   }
 
   destroy() {
-    if (this.modicum == null) {
+    if (this.gl == null) {
       return;
     }
-    this.modicum = null;
+    this.gl = null;
   }
 
   setUniforms(values) {
@@ -420,21 +362,21 @@ class UniformGroup {
 }
 
 class IndexBuffer {
-  constructor(modicum, numIndices) {
-    this.modicum = modicum;
-    this.buffer = this.modicum.gl.createBuffer();
+  constructor(gl, numIndices) {
+    this.gl = gl;
+    this.buffer = this.gl.createBuffer();
     this.indices = new Uint16Array(numIndices);
     this.dirty = true;
   }
 
   destroy() {
-    if (this.modicum == null) {
+    if (this.gl == null) {
       return;
     }
-    this.modicum.gl.deleteBuffer(this.buffer);
+    this.gl.deleteBuffer(this.buffer);
     this.buffer = null;
     this.indices = null;
-    this.modicum = null;
+    this.gl = null;
   }
 
   setIndex(index, values) {
@@ -450,7 +392,7 @@ class IndexBuffer {
   update() {
     if (this.dirty) {
       this.dirty = false;
-      const gl = this.modicum.gl;
+      const gl = this.gl;
       gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.buffer);
       gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, this.indices, gl.STATIC_DRAW);
     }
@@ -459,23 +401,23 @@ class IndexBuffer {
 }
 
 class VertexBuffer {
-  constructor(modicum, format, numVertices) {
-    this.modicum = modicum;
+  constructor(gl, format, numVertices) {
+    this.gl = gl;
     this.numVertices = numVertices;
     this.stride = format.stride;
-    this.buffer = this.modicum.gl.createBuffer();
+    this.buffer = this.gl.createBuffer();
     this.vertices = format.create({ size: numVertices });
     this.dirty = true;
   }
 
   destroy() {
-    if (this.modicum == null) {
+    if (this.gl == null) {
       return;
     }
-    this.modicum.gl.deleteBuffer(this.buffer);
+    this.gl.deleteBuffer(this.buffer);
     this.buffer = null;
     this.vertices = null;
-    this.modicum = null;
+    this.gl = null;
   }
 
   setVertex(index, values) {
@@ -487,93 +429,9 @@ class VertexBuffer {
   update() {
     if (this.dirty) {
       this.dirty = false;
-      const gl = this.modicum.gl;
+      const gl = this.gl;
       gl.bindBuffer(gl.ARRAY_BUFFER, this.buffer);
       gl.bufferData(gl.ARRAY_BUFFER, this.vertices, gl.STATIC_DRAW);
-    }
-    return this;
-  }
-}
-
-const textureFormatsByChannelCount = [
-  ["RED", "LUMINANCE"],
-  ["RG", "LUMINANCE_ALPHA"],
-  ["RGB"],
-  ["RGBA"]
-];
-
-class Texture {
-  constructor(modicum, width, height, data, params) {
-    this.modicum = modicum;
-    this.setData(width, height, data, params);
-  }
-
-  destroy() {
-    if (this.modicum == null) {
-      return;
-    }
-    this.modicum.gl.deleteTexture(this.nativeTex);
-    this.nativeTex = null;
-    this.data = null;
-    this.modicum = null;
-  }
-
-  setData(width, height, data, params) {
-    this.width = width;
-    this.height = height;
-
-    this.isFloat = getParam(params, "isFloat", false);
-    this.data = this.isFloat ? Float32Array.from(data) : Uint8Array.from(data);
-
-    this.numChannels = Math.min(4, getParam(params, "numChannels", 4));
-    this.smooth = getParam(params, "smooth", true);
-    this.repeat = getParam(params, "repeat", false);
-
-    const gl = this.modicum.gl;
-    this.nativeTex = gl.createTexture();
-
-    this.level = 0;
-    this.format =
-      gl[
-        textureFormatsByChannelCount[this.numChannels - 1].find(
-          format => gl[format] != null
-        )
-      ];
-    this.type = this.isFloat ? gl.FLOAT : gl.UNSIGNED_BYTE;
-    this.filter = this.smooth ? gl.LINEAR : gl.NEAREST;
-    this.wrappingFunction = this.repeat ? gl.REPEAT : gl.CLAMP_TO_EDGE;
-    if (this.isFloat) {
-      gl.getExtension("OES_texture_float");
-    }
-    if (this.isFloat && this.smooth) {
-      gl.getExtension("OES_texture_float_linear");
-    }
-
-    this.dirty = true;
-    return this;
-  }
-
-  update(force) {
-    if (this.dirty) {
-      this.dirty = false;
-      const gl = this.modicum.gl;
-      const tex2D = gl.TEXTURE_2D;
-      gl.bindTexture(tex2D, this.nativeTex);
-      gl.texImage2D(
-        tex2D,
-        this.level,
-        this.format,
-        this.width,
-        this.height,
-        0,
-        this.format,
-        this.type,
-        this.data
-      );
-      gl.texParameteri(tex2D, gl.TEXTURE_WRAP_S, this.wrappingFunction);
-      gl.texParameteri(tex2D, gl.TEXTURE_WRAP_T, this.wrappingFunction);
-      gl.texParameteri(tex2D, gl.TEXTURE_MIN_FILTER, this.filter);
-      gl.texParameteri(tex2D, gl.TEXTURE_MAG_FILTER, this.filter);
     }
     return this;
   }

@@ -1,10 +1,21 @@
 import Modicum from "./modicum.js";
 
-const makeResizer = (modicum, func) => () => {
-  modicum.canvas.width = modicum.canvas.clientWidth;
-  modicum.canvas.height = modicum.canvas.clientHeight;
-  modicum.resize();
-  func(modicum.width, modicum.height);
+const makeResizer = (modicum, func, target = null, resolution = 1.0) => {
+  if (target == null) {
+    target = modicum.canvas;
+  }
+
+  const resizer = {
+    resolution,
+    resize: () => {
+      modicum.canvas.width = target.clientWidth * resizer.resolution;
+      modicum.canvas.height = target.clientHeight * resizer.resolution;
+      modicum.resize(modicum.canvas.width, modicum.canvas.height);
+      func(modicum.width, modicum.height);
+    }
+  };
+
+  return resizer;
 };
 
 const makeAnimator = func => {
@@ -40,4 +51,65 @@ const setAdditiveBlending = modicum => {
   });
 };
 
-export { makeResizer, makeAnimator, setDepthTest, setAdditiveBlending };
+const parseVec = s =>
+  s
+    .split(" ")
+    .slice(1)
+    .map(s => parseFloat(s));
+
+const getVec = (lines, prefix) =>
+  lines.filter(line => line.startsWith(`${prefix} `)).map(parseVec);
+
+const parseFace = s => {
+  const ids = s.split(" ").slice(1);
+  return Array(ids.length - 2)
+    .fill()
+    .map((_, i) => [ids[0], ids[i + 1], ids[i + 2]])
+    .flat();
+};
+
+const loadOBJ = async url => {
+  const lines = (await fetch(url).then(response => response.text())).split(
+    "\n"
+  );
+  const positionRecords = getVec(lines, "v");
+  const uvRecords = getVec(lines, "vt");
+  const normalRecords = getVec(lines, "vn");
+  const vertexIDs = lines
+    .filter(line => line.startsWith("f "))
+    .map(parseFace)
+    .flat();
+  const uniqueVertexIDs = Array.from(new Set(vertexIDs));
+  const vertices = uniqueVertexIDs.map((id, index) => {
+    const [positionIndex, uvIndex, normalIndex] = id
+      .split("/")
+      .map(id => parseInt(id) - 1);
+    return {
+      id,
+      index,
+      position: positionRecords[positionIndex],
+      uv: uvRecords[uvIndex],
+      normal: normalRecords[normalIndex]
+    };
+  });
+  const indicesByVertexID = new Map(
+    vertices.map(vertex => [vertex.id, vertex.index])
+  );
+
+  return {
+    numVertices: uniqueVertexIDs.length,
+    numTriangles: vertexIDs.length / 3,
+    positions: vertices.map(({ position }) => position).flat(),
+    uvs: vertices.map(({ uv }) => uv).flat(),
+    normals: vertices.map(({ normal }) => normal).flat(),
+    indices: vertexIDs.map(vertexID => indicesByVertexID.get(vertexID))
+  };
+};
+
+export {
+  makeResizer,
+  makeAnimator,
+  setDepthTest,
+  setAdditiveBlending,
+  loadOBJ
+};

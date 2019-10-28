@@ -40,7 +40,7 @@ document.body.onload = async () => {
 
   let alpha = 0;
 
-  const resizer = makeResizer(modicum, (width, height) => {
+  const { resize } = makeResizer(modicum, (width, height) => {
     mat3.identity(camera);
     mat3.scale(camera, camera, [1, -1]);
     mat3.translate(camera, camera, [-1, -1]);
@@ -62,7 +62,7 @@ document.body.onload = async () => {
     program.drawMesh(mesh2, scene);
   };
 
-  window.onresize = resizer;
-  resizer();
+  window.onresize = resize;
+  resize();
   animator.start();
 };
