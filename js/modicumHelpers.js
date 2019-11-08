@@ -44,6 +44,20 @@ const setDepthTest = (modicum, enabled) => {
   );
 };
 
+const setCulling = (modicum, front, back) => {
+  modicum.tweak(gl => {
+    gl.enable(gl.CULL_FACE);
+    gl.cullFace(front && back ? gl.FRONT_AND_BACK : front ? gl.FRONT : gl.BACK);
+  });
+};
+
+const setStandardBlending = modicum => {
+  modicum.tweak(gl => {
+    gl.enable(gl.BLEND);
+    gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+  });
+};
+
 const setAdditiveBlending = modicum => {
   modicum.tweak(gl => {
     gl.enable(gl.BLEND);
@@ -110,6 +124,8 @@ export {
   makeResizer,
   makeAnimator,
   setDepthTest,
+  setCulling,
+  setStandardBlending,
   setAdditiveBlending,
   loadOBJ
 };
