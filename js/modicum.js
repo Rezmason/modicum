@@ -60,7 +60,6 @@ class Modicum {
     this.resize();
     gl.clearColor(0, 0, 0, 1);
     gl.clear(gl.COLOR_BUFFER_BIT);
-    gl.colorMask(true, true, true, false);
 
     this.formats = Object.fromEntries(
       uniformFormatNames.map(formatName => createFormat(gl, formatName))
