@@ -46,6 +46,12 @@ const defaultParams = {
   alpha: false
 };
 
+const bindTo = (gl, target) => {
+  const { width, height, frameBuffer } = target;
+  gl.bindFramebuffer(gl.FRAMEBUFFER, frameBuffer);
+  gl.viewport(0, 0, width, height);
+};
+
 class Modicum {
   constructor(canvas, params = {}) {
     if (canvas == null) {
@@ -54,12 +60,12 @@ class Modicum {
     this.canvas = canvas;
     this.gl = canvas.getContext("webgl", { ...defaultParams, ...params });
     const gl = this.gl;
+    this.defaultTarget = {};
 
     gl.enable(gl.BLEND);
     gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
     this.resize();
-    gl.clearColor(0, 0, 0, 1);
-    gl.clear(gl.COLOR_BUFFER_BIT);
+    this.clear();
 
     this.formats = Object.fromEntries(
       uniformFormatNames.map(formatName => createFormat(gl, formatName))
@@ -76,12 +82,15 @@ class Modicum {
     if (height == null) height = this.gl.drawingBufferHeight;
     this.width = width;
     this.height = height;
-    this.gl.viewport(0, 0, this.width, this.height);
+    this.defaultTarget.width = width;
+    this.defaultTarget.height = height;
     return this;
   }
 
-  clear(color, clearDepth = false) {
+  clear(color, clearDepth = false, target = null) {
     if (color != null) this.gl.clearColor(color.r, color.g, color.b, color.a);
+    else this.gl.clearColor(0, 0, 0, 1);
+    bindTo(this.gl, target == null ? this.defaultTarget : target);
     this.gl.clear(
       this.gl.COLOR_BUFFER_BIT | (clearDepth ? this.gl.DEPTH_BUFFER_BIT : 0)
     );
@@ -89,7 +98,13 @@ class Modicum {
   }
 
   makeProgram(vertSource = null, fragSource = null) {
-    return new Program(this.gl, this.formats, vertSource, fragSource);
+    return new Program(
+      this.gl,
+      this.formats,
+      this.defaultTarget,
+      vertSource,
+      fragSource
+    );
   }
 
   async loadProgram(vertURL = null, fragURL = null) {
@@ -101,7 +116,13 @@ class Modicum {
         ? Promise.resolve()
         : fetch(fragURL).then(response => response.text())
     ]);
-    return new Program(this.gl, this.formats, vertSource, fragSource);
+    return new Program(
+      this.gl,
+      this.formats,
+      this.defaultTarget,
+      vertSource,
+      fragSource
+    );
   }
 
   async makeTexture(width, height, data, params = null) {
@@ -153,9 +174,10 @@ void main(void) {
 `;
 
 class Program {
-  constructor(gl, formats, vertSource, fragSource) {
+  constructor(gl, formats, defaultTarget, vertSource, fragSource) {
     this.gl = gl;
     this.formats = formats;
+    this.defaultTarget = defaultTarget;
 
     if (vertSource == null) {
       vertSource = simpleVertSource;
@@ -227,11 +249,13 @@ class Program {
     this.nativeProg = null;
     this.vertShader = null;
     this.fragShader = null;
+    this.defaultTarget = null;
     this.gl = null;
   }
 
-  activate() {
+  activate(target = null) {
     this.gl.useProgram(this.nativeProg);
+    bindTo(this.gl, target == null ? this.defaultTarget : target);
     for (const prop in this.attributeData)
       this.gl.enableVertexAttribArray(this.attributeData[prop].index);
     return this;
@@ -252,19 +276,30 @@ class Program {
     return new UniformGroup(this.gl, this).setUniforms(values);
   }
 
-  drawMesh(mesh, other) {
+  drawMesh(mesh, uniformGroups = null) {
     mesh.update();
 
-    if (other == null) other = mesh.uniformGroup;
+    if (uniformGroups != null) {
+      if (Array.isArray(uniformGroups)) {
+        uniformGroups = [mesh.uniformGroup, ...uniformGroups];
+      } else {
+        uniformGroups = [mesh.uniformGroup, uniformGroups];
+      }
+    } else {
+      uniformGroups = [mesh.uniformGroup];
+    }
+
     this.textureIndexer.currentIndex = 0;
-    Object.entries(this.uniformData).forEach(([propName, datum]) =>
-      datum.format.assign(
-        datum.location,
-        (propName in mesh.uniformGroup.uniformsUsed ? mesh.uniformGroup : other)
-          .uniforms[propName],
-        this
-      )
-    );
+    Object.entries(this.uniformData).forEach(([propName, datum]) => {
+      const group = uniformGroups.find(
+        ({ uniformsUsed }) => uniformsUsed[propName]
+      );
+      if (group == null) {
+        console.warn(`Uniform ${propName} has no value.`);
+      } else {
+        datum.format.assign(datum.location, group.uniforms[propName], this);
+      }
+    });
 
     const gl = this.gl;
 

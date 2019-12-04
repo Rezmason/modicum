@@ -9,6 +9,11 @@ document.body.onload = async () => {
   const modicum = new Modicum();
   document.body.appendChild(modicum.canvas);
   await modicum.installTextures();
+
+  const renderTexture = await modicum.makeTexture(1, 1, [], { isFloat: true });
+
+  // 1. Animate something, render it to a texture
+
   const program = await modicum.loadProgram(
     "shaders/textured.vert",
     "shaders/textured.frag"

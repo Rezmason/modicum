@@ -60,6 +60,11 @@ const isPowerOfTwo = x => (x & (x - 1)) == 0;
 class Texture {
   constructor(gl, width, height, data, params) {
     this.gl = gl;
+    this.nativeTex = gl.createTexture();
+    this.isFloat = false;
+    this.smooth = true;
+    this.repeat = false;
+    this.numChannels = 4;
     this.setData(width, height, data, params);
   }
 
@@ -74,15 +79,18 @@ class Texture {
   }
 
   setData(width, height, data, params) {
+    this.dimensionsChanged = this.width !== width || this.height !== height;
     this.width = width;
     this.height = height;
 
-    this.isFloat = getParam(params, "isFloat", false);
-    this.data = this.isFloat ? Float32Array.from(data) : Uint8Array.from(data);
+    if (params != null) {
+      this.isFloat = getParam(params, "isFloat", false);
+      this.smooth = getParam(params, "smooth", true);
+      this.repeat = getParam(params, "repeat", false);
+      this.numChannels = Math.min(4, getParam(params, "numChannels", 4));
+    }
 
-    this.numChannels = Math.min(4, getParam(params, "numChannels", 4));
-    this.smooth = getParam(params, "smooth", true);
-    this.repeat = getParam(params, "repeat", false);
+    this.data = this.isFloat ? Float32Array.from(data) : Uint8Array.from(data);
 
     if (this.repeat && !(isPowerOfTwo(width) && isPowerOfTwo(height))) {
       console.warn("WebGL won't let you repeat a non-power-of-two texture.");
@@ -90,7 +98,6 @@ class Texture {
     }
 
     const gl = this.gl;
-    this.nativeTex = gl.createTexture();
 
     this.level = 0;
     this.format =
@@ -100,8 +107,10 @@ class Texture {
         )
       ];
     this.type = this.isFloat ? gl.FLOAT : gl.UNSIGNED_BYTE;
+
     this.filter = this.smooth ? gl.LINEAR : gl.NEAREST;
     this.wrappingFunction = this.repeat ? gl.REPEAT : gl.CLAMP_TO_EDGE;
+
     if (this.isFloat) {
       gl.getExtension("OES_texture_float");
     }
@@ -119,17 +128,33 @@ class Texture {
       const gl = this.gl;
       const tex2D = gl.TEXTURE_2D;
       gl.bindTexture(tex2D, this.nativeTex);
-      gl.texImage2D(
-        tex2D,
-        this.level,
-        this.format,
-        this.width,
-        this.height,
-        0,
-        this.format,
-        this.type,
-        this.data
-      );
+      if (this.dimensionsChanged) {
+        gl.texImage2D(
+          tex2D,
+          this.level,
+          this.format,
+          this.width,
+          this.height,
+          0,
+          this.format,
+          this.type,
+          this.data
+        );
+      } else {
+        gl.texSubImage2D(
+          tex2D,
+          this.level,
+          0,
+          0,
+          this.width,
+          this.height,
+          0,
+          this.format,
+          this.type,
+          this.data
+        );
+      }
+      this.dimensionsChanged = false;
       gl.texParameteri(tex2D, gl.TEXTURE_WRAP_S, this.wrappingFunction);
       gl.texParameteri(tex2D, gl.TEXTURE_WRAP_T, this.wrappingFunction);
       gl.texParameteri(tex2D, gl.TEXTURE_MIN_FILTER, this.filter);
