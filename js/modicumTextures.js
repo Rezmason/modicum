@@ -83,12 +83,10 @@ class Texture {
     this.width = width;
     this.height = height;
 
-    if (params != null) {
-      this.isFloat = getParam(params, "isFloat", false);
-      this.smooth = getParam(params, "smooth", true);
-      this.repeat = getParam(params, "repeat", false);
-      this.numChannels = Math.min(4, getParam(params, "numChannels", 4));
-    }
+    this.isFloat = getParam(params, "isFloat", false);
+    this.smooth = getParam(params, "smooth", true);
+    this.repeat = getParam(params, "repeat", false);
+    this.numChannels = Math.min(4, getParam(params, "numChannels", 4));
 
     if (data == null) {
       this.data = null;
@@ -134,7 +132,7 @@ class Texture {
       const gl = this.gl;
       const tex2D = gl.TEXTURE_2D;
       gl.bindTexture(tex2D, this.nativeTex);
-      if (this.dimensionsChanged) {
+      if (this.dimensionsChanged || force) {
         gl.texImage2D(
           tex2D,
           this.level,
@@ -170,4 +168,69 @@ class Texture {
   }
 }
 
-export { Texture, loadImageTexture, createSamplerFormats };
+class Target {
+  constructor(gl, width, height, params) {
+    this.gl = gl;
+    this.frameBuffer = gl.createFramebuffer();
+    if (getParam(params, "color", true)) {
+      this.colorTexture = new Texture(gl, width, height, null, params);
+    }
+    if (getParam(params, "depth", false)) {
+      this.depthTexture = new Texture(gl, width, height, null, params);
+    }
+    this.resize(width, height);
+  }
+
+  destroy() {
+    if (this.gl == null) {
+      return;
+    }
+    this.gl.deleteFramebuffer(this.frameBuffer);
+    this.frameBuffer = null;
+    if (this.colorTexture != null) {
+      this.colorTexture.destroy();
+      this.colorTexture = null;
+    }
+    if (this.depthTexture != null) {
+      this.depthTexture.destroy();
+      this.depthTexture = null;
+    }
+  }
+
+  resize(width, height) {
+    if (this.width !== width && this.height !== height) {
+      this.width = width;
+      this.height = height;
+      const gl = this.gl;
+
+      gl.bindFramebuffer(gl.FRAMEBUFFER, this.frameBuffer);
+      if (this.colorTexture != null) {
+        this.colorTexture.setData(width, height);
+        this.colorTexture.dimensionsChanged = true;
+        this.colorTexture.update();
+        gl.framebufferTexture2D(
+          gl.FRAMEBUFFER,
+          gl.COLOR_ATTACHMENT0,
+          gl.TEXTURE_2D,
+          this.colorTexture.nativeTex,
+          0
+        );
+      }
+      if (this.depthTexture != null) {
+        this.depthTexture.setData(width, height);
+        this.depthTexture.dimensionsChanged = true;
+        this.depthTexture.update();
+        gl.framebufferTexture2D(
+          gl.FRAMEBUFFER,
+          gl.DEPTH_ATTACHMENT,
+          gl.TEXTURE_2D,
+          this.depthTexture.nativeTex,
+          0
+        );
+      }
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    }
+  }
+}
+
+export { Texture, loadImageTexture, Target, createSamplerFormats };

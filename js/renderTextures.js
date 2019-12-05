@@ -8,9 +8,8 @@ const { vec3, mat4 } = glMatrix;
 document.body.onload = async () => {
   const modicum = new Modicum();
   document.body.appendChild(modicum.canvas);
-  await modicum.installTextures();
 
-  const renderTexture = await modicum.makeTexture(1, 1, null, {
+  const target = await modicum.makeTarget(1, 1, null, {
     isFloat: true
   });
 
@@ -52,7 +51,7 @@ document.body.onload = async () => {
     uniform sampler2D uSampler;
     uniform float uTime;
     void main(void) {
-      gl_FragColor = vec4(texture2D(uSampler, vUV).rg, fract(uTime), 1.0);
+      gl_FragColor = vec4(texture2D(uSampler, vUV).rg, (sin(uTime) + 1.) * 0.5, 1.0);
     }
     `
   );
@@ -62,9 +61,10 @@ document.body.onload = async () => {
     .setVertex(0, { aPos: screenQuadPositions })
     .setIndex(0, screenQuadIndices)
     .update()
-    .setUniforms({ uTime: [0], uSampler: renderTexture });
+    .setUniforms({ uTime: [0], uSampler: target.colorTexture });
 
   const { resize } = makeResizer(modicum, (width, height) => {
+    target.resize(width, height);
     redraw();
   });
 
@@ -75,11 +75,12 @@ document.body.onload = async () => {
   });
 
   const redraw = () => {
-    modicum.clear(null);
-    program1.activate();
+    modicum.clear(null, false, target);
+    program1.activate(target);
     program1.drawMesh(mesh1);
     program1.deactivate();
 
+    modicum.clear(null);
     program2.activate();
     program2.drawMesh(mesh2);
     program2.deactivate();

@@ -46,7 +46,7 @@ const defaultParams = {
   alpha: false
 };
 
-const bindTo = (gl, target) => {
+const bindToTarget = (gl, target) => {
   const { width, height, frameBuffer } = target;
   gl.bindFramebuffer(gl.FRAMEBUFFER, frameBuffer);
   gl.viewport(0, 0, width, height);
@@ -90,7 +90,7 @@ class Modicum {
   clear(color, clearDepth = false, target = null) {
     if (color != null) this.gl.clearColor(color.r, color.g, color.b, color.a);
     else this.gl.clearColor(0, 0, 0, 1);
-    bindTo(this.gl, target == null ? this.defaultTarget : target);
+    bindToTarget(this.gl, target == null ? this.defaultTarget : target);
     this.gl.clear(
       this.gl.COLOR_BUFFER_BIT | (clearDepth ? this.gl.DEPTH_BUFFER_BIT : 0)
     );
@@ -135,9 +135,16 @@ class Modicum {
     return await this.textures.loadImageTexture(this.gl, imageURL, params);
   }
 
+  async makeTarget(width, height, params = null) {
+    await this.installTextures();
+    return new this.textures.Target(this.gl, width, height, params);
+  }
+
   async installTextures() {
-    this.textures = await import("./modicumTextures.js");
-    Object.assign(this.formats, this.textures.createSamplerFormats(this));
+    if (this.textures == null) {
+      this.textures = await import("./modicumTextures.js");
+      Object.assign(this.formats, this.textures.createSamplerFormats(this));
+    }
   }
 }
 
@@ -255,7 +262,7 @@ class Program {
 
   activate(target = null) {
     this.gl.useProgram(this.nativeProg);
-    bindTo(this.gl, target == null ? this.defaultTarget : target);
+    bindToTarget(this.gl, target == null ? this.defaultTarget : target);
     for (const prop in this.attributeData)
       this.gl.enableVertexAttribArray(this.attributeData[prop].index);
     return this;
