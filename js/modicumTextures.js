@@ -90,7 +90,13 @@ class Texture {
       this.numChannels = Math.min(4, getParam(params, "numChannels", 4));
     }
 
-    this.data = this.isFloat ? Float32Array.from(data) : Uint8Array.from(data);
+    if (data == null) {
+      this.data = null;
+    } else {
+      this.data = this.isFloat
+        ? Float32Array.from(data)
+        : Uint8Array.from(data);
+    }
 
     if (this.repeat && !(isPowerOfTwo(width) && isPowerOfTwo(height))) {
       console.warn("WebGL won't let you repeat a non-power-of-two texture.");
