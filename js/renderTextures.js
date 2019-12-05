@@ -9,7 +9,7 @@ document.body.onload = async () => {
   const modicum = new Modicum();
   document.body.appendChild(modicum.canvas);
 
-  const target = await modicum.makeTarget(1, 1, null, {
+  const target = await modicum.makeTarget(1, 1, {
     isFloat: true
   });
 
@@ -31,7 +31,7 @@ document.body.onload = async () => {
     varying vec2 vUV;
     uniform float uTime;
     void main(void) {
-      gl_FragColor = vec4(abs(fract(vUV + uTime) - 0.5) * 2., 0., 1.0);
+      gl_FragColor = vec4(abs(fract(vUV + uTime) - 0.5) * 2. * 100., 0., 1.0);
     }
     `
   );
@@ -51,7 +51,7 @@ document.body.onload = async () => {
     uniform sampler2D uSampler;
     uniform float uTime;
     void main(void) {
-      gl_FragColor = vec4(texture2D(uSampler, vUV).rg, (sin(uTime) + 1.) * 0.5, 1.0);
+      gl_FragColor = vec4(texture2D(uSampler, vUV).rg / 100., (sin(uTime * 10.) + 1.) * 0.5, 1.0);
     }
     `
   );

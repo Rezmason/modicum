@@ -88,6 +88,8 @@ class Texture {
     this.repeat = getParam(params, "repeat", false);
     this.numChannels = Math.min(4, getParam(params, "numChannels", 4));
 
+    console.log(this.isFloat);
+
     if (data == null) {
       this.data = null;
     } else {
@@ -126,13 +128,13 @@ class Texture {
     return this;
   }
 
-  update(force) {
+  update() {
     if (this.dirty) {
       this.dirty = false;
       const gl = this.gl;
       const tex2D = gl.TEXTURE_2D;
       gl.bindTexture(tex2D, this.nativeTex);
-      if (this.dimensionsChanged || force) {
+      if (this.dimensionsChanged) {
         gl.texImage2D(
           tex2D,
           this.level,
@@ -172,6 +174,7 @@ class Target {
   constructor(gl, width, height, params) {
     this.gl = gl;
     this.frameBuffer = gl.createFramebuffer();
+    this.params = params;
     if (getParam(params, "color", true)) {
       this.colorTexture = new Texture(gl, width, height, null, params);
     }
@@ -187,6 +190,7 @@ class Target {
     }
     this.gl.deleteFramebuffer(this.frameBuffer);
     this.frameBuffer = null;
+    this.params = null;
     if (this.colorTexture != null) {
       this.colorTexture.destroy();
       this.colorTexture = null;
@@ -205,7 +209,7 @@ class Target {
 
       gl.bindFramebuffer(gl.FRAMEBUFFER, this.frameBuffer);
       if (this.colorTexture != null) {
-        this.colorTexture.setData(width, height);
+        this.colorTexture.setData(width, height, null, this.params);
         this.colorTexture.dimensionsChanged = true;
         this.colorTexture.update();
         gl.framebufferTexture2D(
@@ -217,7 +221,7 @@ class Target {
         );
       }
       if (this.depthTexture != null) {
-        this.depthTexture.setData(width, height);
+        this.depthTexture.setData(width, height, null, this.params);
         this.depthTexture.dimensionsChanged = true;
         this.depthTexture.update();
         gl.framebufferTexture2D(
