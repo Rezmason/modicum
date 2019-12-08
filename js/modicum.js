@@ -47,8 +47,8 @@ const defaultParams = {
 };
 
 const bindToTarget = (gl, target) => {
-  const { width, height, frameBuffer } = target;
-  gl.bindFramebuffer(gl.FRAMEBUFFER, frameBuffer);
+  const { width, height, nativeFrameBuf } = target;
+  gl.bindFramebuffer(gl.FRAMEBUFFER, nativeFrameBuf);
   gl.viewport(0, 0, width, height);
 };
 
@@ -59,6 +59,10 @@ class Modicum {
     }
     this.canvas = canvas;
     this.gl = canvas.getContext("webgl", { ...defaultParams, ...params });
+    if (params.debugger != null) {
+      console.log("Modicum running through debugger");
+      this.gl = params.debugger(this.gl);
+    }
     const gl = this.gl;
     this.defaultTarget = {};
 
@@ -311,12 +315,12 @@ class Program {
     const gl = this.gl;
 
     Object.entries(this.attributeData).forEach(([propName, datum]) => {
-      gl.bindBuffer(gl.ARRAY_BUFFER, mesh.vertexBuffers[propName].buffer);
+      gl.bindBuffer(gl.ARRAY_BUFFER, mesh.vertexBuffers[propName].nativeBuf);
       const { stride, pointerType } = datum.format;
       gl.vertexAttribPointer(datum.index, stride, pointerType, false, 0, 0);
     });
 
-    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, mesh.indexBuffer.buffer);
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, mesh.indexBuffer.nativeBuf);
     gl.drawElements(gl.TRIANGLES, mesh.numIndices, gl.UNSIGNED_SHORT, 0);
     return this;
   }
@@ -405,7 +409,7 @@ class UniformGroup {
 class IndexBuffer {
   constructor(gl, numIndices) {
     this.gl = gl;
-    this.buffer = this.gl.createBuffer();
+    this.nativeBuf = this.gl.createBuffer();
     this.indices = new Uint16Array(numIndices);
     this.dirty = true;
   }
@@ -414,8 +418,8 @@ class IndexBuffer {
     if (this.gl == null) {
       return;
     }
-    this.gl.deleteBuffer(this.buffer);
-    this.buffer = null;
+    this.gl.deleteBuffer(this.nativeBuf);
+    this.nativeBuf = null;
     this.indices = null;
     this.gl = null;
   }
@@ -434,7 +438,7 @@ class IndexBuffer {
     if (this.dirty) {
       this.dirty = false;
       const gl = this.gl;
-      gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.buffer);
+      gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.nativeBuf);
       gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, this.indices, gl.STATIC_DRAW);
     }
     return this;
@@ -446,7 +450,7 @@ class VertexBuffer {
     this.gl = gl;
     this.numVertices = numVertices;
     this.stride = format.stride;
-    this.buffer = this.gl.createBuffer();
+    this.nativeBuf = this.gl.createBuffer();
     this.vertices = format.create({ size: numVertices });
     this.dirty = true;
   }
@@ -455,8 +459,8 @@ class VertexBuffer {
     if (this.gl == null) {
       return;
     }
-    this.gl.deleteBuffer(this.buffer);
-    this.buffer = null;
+    this.gl.deleteBuffer(this.nativeBuf);
+    this.nativeBuf = null;
     this.vertices = null;
     this.gl = null;
   }
@@ -471,7 +475,7 @@ class VertexBuffer {
     if (this.dirty) {
       this.dirty = false;
       const gl = this.gl;
-      gl.bindBuffer(gl.ARRAY_BUFFER, this.buffer);
+      gl.bindBuffer(gl.ARRAY_BUFFER, this.nativeBuf);
       gl.bufferData(gl.ARRAY_BUFFER, this.vertices, gl.STATIC_DRAW);
     }
     return this;

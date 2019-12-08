@@ -19,9 +19,9 @@ const createSamplerFormats = ({ gl }) => ({
       const index = textureIndexer.currentIndex++;
       gl.uniform1i(l, index);
       gl.activeTexture(gl.TEXTURE0 + index);
-      if (texture == null) {
-        gl.bindTexture(gl.TEXTURE_2D, null);
-      } else {
+      const nativeTex = texture != null ? texture.nativeTex : null;
+      gl.bindTexture(gl.TEXTURE_2D, nativeTex);
+      if (texture != null) {
         texture.update();
       }
     }
@@ -87,8 +87,6 @@ class Texture {
     this.smooth = getParam(params, "smooth", true);
     this.repeat = getParam(params, "repeat", false);
     this.numChannels = Math.min(4, getParam(params, "numChannels", 4));
-
-    console.log(this.isFloat);
 
     if (data == null) {
       this.data = null;
@@ -173,7 +171,7 @@ class Texture {
 class Target {
   constructor(gl, width, height, params) {
     this.gl = gl;
-    this.frameBuffer = gl.createFramebuffer();
+    this.nativeFrameBuf = gl.createFramebuffer();
     this.params = params;
     if (getParam(params, "color", true)) {
       this.colorTexture = new Texture(gl, width, height, null, params);
@@ -188,8 +186,8 @@ class Target {
     if (this.gl == null) {
       return;
     }
-    this.gl.deleteFramebuffer(this.frameBuffer);
-    this.frameBuffer = null;
+    this.gl.deleteFramebuffer(this.nativeFrameBuf);
+    this.nativeFrameBuf = null;
     this.params = null;
     if (this.colorTexture != null) {
       this.colorTexture.destroy();
@@ -207,7 +205,7 @@ class Target {
       this.height = height;
       const gl = this.gl;
 
-      gl.bindFramebuffer(gl.FRAMEBUFFER, this.frameBuffer);
+      gl.bindFramebuffer(gl.FRAMEBUFFER, this.nativeFrameBuf);
       if (this.colorTexture != null) {
         this.colorTexture.setData(width, height, null, this.params);
         this.colorTexture.dimensionsChanged = true;

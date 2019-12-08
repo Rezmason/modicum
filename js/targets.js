@@ -3,10 +3,11 @@
 
 import Modicum from "./modicum.js";
 import { makeResizer, makeAnimator } from "./modicumHelpers.js";
-const { vec3, mat4 } = glMatrix;
 
 document.body.onload = async () => {
-  const modicum = new Modicum();
+  const modicum = new Modicum(null, {
+    debugger: WebGLDebugUtils.makeDebugContext
+  });
   document.body.appendChild(modicum.canvas);
 
   const target = await modicum.makeTarget(1, 1, {

@@ -15,19 +15,37 @@ document.body.onload = async () => {
   );
   const scene = program.makeUniformGroup();
   const camera = mat4.create();
-  const transform = mat4.create();
-  scene.setUniforms({
-    uSampler: await modicum.loadImageTexture("assets/crate.bmp"),
-    uTransform: transform
-  });
 
-  const mesh = program
+  const transform1 = mat4.create();
+  mat4.translate(transform1, transform1, vec3.fromValues(-1, 0, 0));
+  mat4.scale(transform1, transform1, vec3.fromValues(0.5, 0.5, 0.5));
+  const mesh1 = program
     .makeMesh(4, 2)
     .setVertex(0, {
-      aPos: [-1, -1, 0, -1, 1, 0, 1, -1, 0, 1, 1, 0],
+      aPos: [-1, 1, 0, -1, -1, 0, 1, 1, 0, 1, -1, 0],
       aUV: [0, 0, 0, 1, 1, 0, 1, 1]
     })
     .setIndex(0, [0, 1, 3, 0, 3, 2])
+    .setUniforms({
+      uSampler: await modicum.loadImageTexture("assets/crate.bmp"),
+      uTransform: transform1
+    })
+    .update();
+
+  const transform2 = mat4.create();
+  mat4.translate(transform2, transform2, vec3.fromValues(1, 0, 0));
+  mat4.scale(transform2, transform2, vec3.fromValues(0.5, 0.5, 0.5));
+  const mesh2 = program
+    .makeMesh(4, 2)
+    .setVertex(0, {
+      aPos: [-1, 1, 0, -1, -1, 0, 1, 1, 0, 1, -1, 0],
+      aUV: [0, 0, 0, 1, 1, 0, 1, 1]
+    })
+    .setIndex(0, [0, 1, 3, 0, 3, 2])
+    .setUniforms({
+      uSampler: await modicum.loadImageTexture("assets/webgl.bmp"),
+      uTransform: transform2
+    })
     .update();
 
   program.activate();
@@ -41,14 +59,17 @@ document.body.onload = async () => {
   });
 
   const animator = makeAnimator((time, delta) => {
-    mat4.rotateZ(transform, transform, delta);
-    scene.setUniforms({ uTransform: transform });
+    mat4.rotateZ(transform1, transform1, delta);
+    mesh1.setUniforms({ uTransform: transform1 });
+    mat4.rotateZ(transform2, transform2, delta);
+    mesh2.setUniforms({ uTransform: transform2 });
     redraw();
   });
 
   const redraw = () => {
     modicum.clear(null, true);
-    program.drawMesh(mesh, scene);
+    program.drawMesh(mesh1, scene);
+    program.drawMesh(mesh2, scene);
   };
 
   window.onresize = resize;
