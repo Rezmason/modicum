@@ -28,6 +28,18 @@ const createSamplerFormats = ({ gl }) => ({
   }
 });
 
+const expandData = (data, isFloat, numChannels) => {
+  if (numChannels === 4) return data;
+  const alpha = isFloat ? 1 : 0xff;
+  const expandedData = Array(data.length / numChannels)
+    .fill()
+    .map(_ => [0, 0, 0, alpha]);
+  data.forEach((value, index) => {
+    expandedData[Math.floor(index / numChannels)][index % numChannels] = value;
+  });
+  return expandedData.flat();
+};
+
 const loadImageTexture = async (gl, imageURL, params = null) => {
   const isFloat = getParam(params, "isFloat", false);
   const numChannels = Math.min(4, getParam(params, "numChannels", 4));
@@ -47,13 +59,6 @@ const loadImageTexture = async (gl, imageURL, params = null) => {
   const data = isFloat ? rawData.map(i => i / 0xff) : rawData;
   return new Texture(gl, image.width, image.height, data, params);
 };
-
-const textureFormatsByChannelCount = [
-  ["RED", "LUMINANCE"],
-  ["RG", "LUMINANCE_ALPHA"],
-  ["RGB"],
-  ["RGBA"]
-];
 
 const isPowerOfTwo = x => (x & (x - 1)) == 0;
 
@@ -92,8 +97,8 @@ class Texture {
       this.data = null;
     } else {
       this.data = this.isFloat
-        ? Float32Array.from(data)
-        : Uint8Array.from(data);
+        ? Float32Array.from(expandData(data, this.isFloat, this.numChannels))
+        : Uint8Array.from(expandData(data, this.isFloat, this.numChannels));
     }
 
     if (this.repeat && !(isPowerOfTwo(width) && isPowerOfTwo(height))) {
@@ -104,12 +109,10 @@ class Texture {
     const gl = this.gl;
 
     this.level = 0;
-    this.format =
-      gl[
-        textureFormatsByChannelCount[this.numChannels - 1].find(
-          format => gl[format] != null
-        )
-      ];
+    this.internalFormat = this.isFloat
+      ? gl[["RGBA32F", "RGBA"].find(format => gl[format] != null)]
+      : gl.RGBA;
+    this.format = gl.RGBA;
     this.type = this.isFloat ? gl.FLOAT : gl.UNSIGNED_BYTE;
 
     this.filter = this.smooth ? gl.LINEAR : gl.NEAREST;
@@ -117,9 +120,10 @@ class Texture {
 
     if (this.isFloat) {
       gl.getExtension("OES_texture_float");
-    }
-    if (this.isFloat && this.smooth) {
-      gl.getExtension("OES_texture_float_linear");
+      gl.getExtension("EXT_float_blend");
+      if (this.smooth) {
+        gl.getExtension("OES_texture_float_linear");
+      }
     }
 
     this.dirty = true;
@@ -136,7 +140,7 @@ class Texture {
         gl.texImage2D(
           tex2D,
           this.level,
-          this.format,
+          this.internalFormat,
           this.width,
           this.height,
           0,
@@ -173,11 +177,13 @@ class Target {
     this.gl = gl;
     this.nativeFrameBuf = gl.createFramebuffer();
     this.params = params;
+    if (getParam(params, "isFloat", false)) {
+      gl.getExtension("WEBGL_color_buffer_float");
+      gl.getExtension("EXT_color_buffer_float");
+      gl.getExtension("EXT_float_blend");
+    }
     if (getParam(params, "color", true)) {
       this.colorTexture = new Texture(gl, width, height, null, params);
-    }
-    if (getParam(params, "depth", false)) {
-      this.depthTexture = new Texture(gl, width, height, null, params);
     }
     this.resize(width, height);
   }
@@ -192,10 +198,6 @@ class Target {
     if (this.colorTexture != null) {
       this.colorTexture.destroy();
       this.colorTexture = null;
-    }
-    if (this.depthTexture != null) {
-      this.depthTexture.destroy();
-      this.depthTexture = null;
     }
   }
 
@@ -215,18 +217,6 @@ class Target {
           gl.COLOR_ATTACHMENT0,
           gl.TEXTURE_2D,
           this.colorTexture.nativeTex,
-          0
-        );
-      }
-      if (this.depthTexture != null) {
-        this.depthTexture.setData(width, height, null, this.params);
-        this.depthTexture.dimensionsChanged = true;
-        this.depthTexture.update();
-        gl.framebufferTexture2D(
-          gl.FRAMEBUFFER,
-          gl.DEPTH_ATTACHMENT,
-          gl.TEXTURE_2D,
-          this.depthTexture.nativeTex,
           0
         );
       }

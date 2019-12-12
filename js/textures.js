@@ -27,7 +27,10 @@ document.body.onload = async () => {
     })
     .setIndex(0, [0, 1, 3, 0, 3, 2])
     .setUniforms({
-      uSampler: await modicum.loadImageTexture("assets/crate.bmp"),
+      uSampler: await modicum.loadImageTexture("assets/crate.bmp", {
+        isFloat: true,
+        numChannels: 2
+      }),
       uTransform: transform1
     })
     .update();
@@ -43,7 +46,9 @@ document.body.onload = async () => {
     })
     .setIndex(0, [0, 1, 3, 0, 3, 2])
     .setUniforms({
-      uSampler: await modicum.loadImageTexture("assets/webgl.bmp"),
+      uSampler: await modicum.loadImageTexture("assets/webgl.bmp", {
+        numChannels: 1
+      }),
       uTransform: transform2
     })
     .update();

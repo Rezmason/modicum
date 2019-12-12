@@ -58,9 +58,24 @@ class Modicum {
       canvas = document.createElement("canvas");
     }
     this.canvas = canvas;
-    this.gl = canvas.getContext("webgl", { ...defaultParams, ...params });
+    const combinedParams = { ...defaultParams, ...params };
+    const contextCandidates =
+      params.api === "v2"
+        ? ["webgl2"]
+        : params.api === "v2Fallback"
+        ? ["webgl2", "webgl"]
+        : ["webgl"];
+    this.gl = contextCandidates.reduce(
+      (gl, candidate) =>
+        gl != null ? gl : canvas.getContext(candidate, combinedParams),
+      null
+    );
+    if (this.gl == null) {
+      console.warn("Modicum is not supported in this browser.");
+      return;
+    }
     if (params.debugger != null) {
-      console.log("Modicum running through debugger");
+      console.log("Modicum is running through your debugger.");
       this.gl = params.debugger(this.gl);
     }
     const gl = this.gl;

@@ -11,7 +11,8 @@ document.body.onload = async () => {
   document.body.appendChild(modicum.canvas);
 
   const target = await modicum.makeTarget(1, 1, {
-    isFloat: true
+    isFloat: true,
+    smooth: true
   });
 
   const screenQuadIndices = [0, 1, 3, 0, 3, 2];
@@ -32,7 +33,8 @@ document.body.onload = async () => {
     varying vec2 vUV;
     uniform float uTime;
     void main(void) {
-      gl_FragColor = vec4(abs(fract(vUV + uTime) - 0.5) * 2. * 100., 0., 1.0);
+      float mag = (sin(uTime * 2.) + 1.) * 0.5 + 1.;
+      gl_FragColor = vec4(vUV * mag, 0., 1.);
     }
     `
   );
@@ -52,7 +54,8 @@ document.body.onload = async () => {
     uniform sampler2D uSampler;
     uniform float uTime;
     void main(void) {
-      gl_FragColor = vec4(texture2D(uSampler, vUV).rg / 100., (sin(uTime * 10.) + 1.) * 0.5, 1.0);
+      float mag = (sin(uTime * 2.) + 1.) * 0.5 + 1.;
+      gl_FragColor = vec4(texture2D(uSampler, vUV).rg / mag, 0.5, 1.);
     }
     `
   );
