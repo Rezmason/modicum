@@ -173,7 +173,9 @@ const processShader = (gl, type, source) => {
   gl.compileShader(shader);
 
   if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
-    throw gl.getShaderInfoLog(shader);
+    console.warn("The following shader didn't compile:");
+    console.warn(gl.getShaderInfoLog(shader));
+    console.warn(source);
     return null;
   }
   return shader;
@@ -184,7 +186,7 @@ attribute vec3 aPos;
 attribute vec3 aColor;
 uniform mat3 uTransform;
 uniform mat3 uCamera;
-varying vec3 vColor;
+varying vec4 vColor;
 void main(void) {
   vColor = vec4(aColor, 1.0);
   gl_Position = vec4(uCamera * uTransform * aPos, 1.0);

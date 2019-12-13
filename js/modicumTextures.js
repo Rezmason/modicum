@@ -31,13 +31,17 @@ const createSamplerFormats = ({ gl }) => ({
 const expandData = (data, isFloat, numChannels) => {
   if (numChannels === 4) return data;
   const alpha = isFloat ? 1 : 0xff;
-  const expandedData = Array(data.length / numChannels)
-    .fill()
-    .map(_ => [0, 0, 0, alpha]);
-  data.forEach((value, index) => {
-    expandedData[Math.floor(index / numChannels)][index % numChannels] = value;
-  });
-  return expandedData.flat();
+
+  const remainder = Array(4 - numChannels).fill(0);
+  remainder[remainder.length - 1] = alpha;
+
+  return data.reduce((array, value, index) => {
+    array.push(value);
+    if ((index + 1) % numChannels === 0) {
+      array.push(...remainder);
+    }
+    return array;
+  }, []);
 };
 
 const loadImageTexture = async (gl, imageURL, params = null) => {
@@ -88,10 +92,12 @@ class Texture {
     this.width = width;
     this.height = height;
 
-    this.isFloat = getParam(params, "isFloat", false);
-    this.smooth = getParam(params, "smooth", true);
-    this.repeat = getParam(params, "repeat", false);
-    this.numChannels = Math.min(4, getParam(params, "numChannels", 4));
+    if (params != null) {
+      this.isFloat = getParam(params, "isFloat", false);
+      this.smooth = getParam(params, "smooth", true);
+      this.repeat = getParam(params, "repeat", false);
+      this.numChannels = Math.min(4, getParam(params, "numChannels", 4));
+    }
 
     if (data == null) {
       this.data = null;
@@ -143,7 +149,7 @@ class Texture {
           this.internalFormat,
           this.width,
           this.height,
-          0,
+          0, // border "must be zero"
           this.format,
           this.type,
           this.data
@@ -152,16 +158,16 @@ class Texture {
         gl.texSubImage2D(
           tex2D,
           this.level,
-          0,
-          0,
+          0, // x offset
+          0, // y offset
           this.width,
           this.height,
-          0,
           this.format,
           this.type,
           this.data
         );
       }
+      this.data = null;
       this.dimensionsChanged = false;
       gl.texParameteri(tex2D, gl.TEXTURE_WRAP_S, this.wrappingFunction);
       gl.texParameteri(tex2D, gl.TEXTURE_WRAP_T, this.wrappingFunction);
