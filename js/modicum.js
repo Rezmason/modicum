@@ -59,12 +59,15 @@ class Modicum {
     }
     this.canvas = canvas;
     const combinedParams = { ...defaultParams, ...params };
+    if (params.api == null) {
+      params.api = "v2Fallback";
+    }
     const contextCandidates =
       params.api === "v2"
         ? ["webgl2"]
-        : params.api === "v2Fallback"
-        ? ["webgl2", "webgl"]
-        : ["webgl"];
+        : params.api === "v1"
+        ? ["webgl"]
+        : ["webgl2", "webgl"];
     this.gl = contextCandidates.reduce(
       (gl, candidate) =>
         gl != null ? gl : canvas.getContext(candidate, combinedParams),

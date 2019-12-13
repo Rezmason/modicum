@@ -187,6 +187,7 @@ class Target {
       gl.getExtension("WEBGL_color_buffer_float");
       gl.getExtension("EXT_color_buffer_float");
       gl.getExtension("EXT_float_blend");
+      // TODO: warn about floating point buffer support with api choice
     }
     if (getParam(params, "color", true)) {
       this.colorTexture = new Texture(gl, width, height, null, params);

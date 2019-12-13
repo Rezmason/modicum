@@ -1,0 +1,256 @@
+<html>
+  <head>
+    <title>Modicum: Smoothlife Demo</title>
+    <meta http-equiv="content-type" content="text/html; charset=ISO-8859-1" />
+    <link rel="stylesheet" type="text/css" href="style.css" />
+    <style>
+      body {
+        background: black;
+        overflow: hidden;
+      }
+
+      canvas {
+        width: 100vmax;
+        height: 100vmax;
+      }
+    </style>
+    <script src="./lib/webgl-debug.js"></script>
+    <script src="./lib/gl-matrix.js"></script>
+    <script type="module">
+      import Modicum from "./js/modicum.js";
+      import { makeResizer, makeAnimator } from "./js/modicumHelpers.js";
+      const { vec3, mat4 } = glMatrix;
+
+      document.body.onload = async () => {
+        const modicum = new Modicum(null, {
+          // debugger: WebGLDebugUtils.makeDebugContext
+        });
+        document.body.appendChild(modicum.canvas);
+        await modicum.installTextures();
+
+        // SmoothLife
+        // Copied from a JSFiddle
+        //   Author: Mikola Lysenko (http://0fps.net)
+        //   License: BSD
+        //   Based on the following paper;  http://arxiv.org/abs/1111.1567
+
+        // Simulation parameters
+        const parameters = {
+          WIDTH: 512,
+          HEIGHT: 512,
+          KERNEL_RADIUS: 6,
+          INNER_RADIUS: 3,
+          OUTER_RADIUS: 5.5,
+          BIRTH_LO: 0.289,
+          BIRTH_HI: 0.336,
+          DEATH_LO: 0.336,
+          DEATH_HI: 0.503,
+          ALPHA_N: 0.028,
+          ALPHA_M: 0.147,
+          DT: 0.5
+        };
+
+        const [width, height] = [parameters.WIDTH, parameters.HEIGHT];
+
+        // Create initial conditions
+        const initialState = Array(width * height)
+          .fill()
+          .map(_ => Math.random());
+
+        // Initialize buffers
+        const buffers = await Promise.all(
+          Array(2)
+            .fill()
+            .map(_ =>
+              modicum.makeTarget(width, height, {
+                color: true,
+                isFloat: true,
+                smooth: false,
+                repeat: true,
+                numChannels: 1
+              })
+            )
+        );
+
+        let currentBuffer = 0;
+
+        buffers[currentBuffer].colorTexture
+          .setData(width, height, initialState)
+          .update();
+        // lowRezNoise.length = 0;
+        initialState.length = 0;
+
+        // Pass through vertex shader
+        const passThruVS = `
+          attribute vec2 aPos;
+
+          void main(void) {
+            gl_Position = vec4(aPos, 0.0, 1.0);
+          }
+      `;
+
+        // Common shader functions
+        const commonFS = `
+          precision highp float;
+
+          #define PI ${Math.PI}
+          ${Object.entries(parameters)
+            .map(([key, value]) => `#define ${key} ${value}`)
+            .join("\n")}
+
+          uniform sampler2D uLastState;
+
+          float f(vec2 p) {
+              return texture2D(uLastState, (gl_FragCoord.xy + p) / vec2(WIDTH, HEIGHT)).r;
+          }
+      `;
+
+        // Updates the state of a single cell
+        const updateStateFS = `
+          ${commonFS}
+
+          float sigma1(float x, float a, float alpha) {
+              return 1.0 / (1.0 + exp(-4.0 * (x - a) / alpha));
+          }
+
+          float sigmaN(float x, float a, float b) {
+              return sigma1(x, a, ALPHA_N) * (1.0 - sigma1(x, b, ALPHA_N));
+          }
+
+          float sigmaM(float x, float y, float m) {
+              float w = sigma1(m, 0.5, ALPHA_M);
+              return x * (1.0 - w) + y * w;
+          }
+
+          float S(float n, float m) {
+              return sigmaN(n,
+                  sigmaM(BIRTH_LO, DEATH_LO, m),
+                  sigmaM(BIRTH_HI, DEATH_HI, m));
+          }
+
+          float weight(float r, float cutoff) {
+              return 1.0 - sigma1(r, cutoff, 0.5);
+          }
+
+          float mixf(float p, float q, float r) {
+            return p * (1. - r) + q * r;
+          }
+
+          void main(void) {
+              const float RI = float(INNER_RADIUS);
+              const float RO = float(OUTER_RADIUS);
+
+              float r1 = 0.0, r2 = 0.0, w1 = 0.0, w2 = 0.0;
+              for (int i = -KERNEL_RADIUS; i <= KERNEL_RADIUS; ++i)
+              for (int j = -KERNEL_RADIUS; j <= KERNEL_RADIUS; ++j) {
+                  float s = f(vec2(i, j));
+                  float r = sqrt(float(i * i + j * j));
+                  float wi = weight(r, RI);
+                  r1 += s * wi;
+                  w1 += wi;
+                  float wo = weight(r, RO);
+                  r2 += s * wo;
+                  w2 += wo;
+              }
+
+              float m = r1 / w1;
+              float n = (r2 - r1) / (w2 - w1);
+
+              gl_FragColor = vec4(
+                clamp(
+                  mixf(
+                    f(vec2(0.)), S(n, m), float(DT)
+                  ),
+                  0., 1.
+                ),
+                0., 0., 1.
+              );
+          }
+      `;
+
+        const renderStateFS = `
+          ${commonFS}
+          uniform vec3 uColor;
+          void main(void) {
+              float value = f(vec2( 0., 0.));
+              float blurred = 0.;
+              blurred += f(vec2(-1.,-1.)) / 16.;
+              blurred += f(vec2(-1., 0.)) /  8.;
+              blurred += f(vec2(-1., 1.)) / 16.;
+              blurred += f(vec2( 0.,-1.)) /  8.;
+              blurred += f(vec2( 0., 0.)) /  4.;
+              blurred += f(vec2( 0., 1.)) /  8.;
+              blurred += f(vec2( 1.,-1.)) / 16.;
+              blurred += f(vec2( 1., 0.)) /  8.;
+              blurred += f(vec2( 1., 1.)) / 16.;
+              gl_FragColor = vec4(uColor * (value * 0.7 + blurred), 1.0);
+          }
+      `;
+
+        const screenQuadIndices = [0, 1, 3, 0, 3, 2];
+        const screenQuadPositions = [-1, -1, -1, 1, 1, -1, 1, 1];
+
+        const updateProgram = modicum.makeProgram(passThruVS, updateStateFS);
+        const renderProgram = modicum.makeProgram(passThruVS, renderStateFS);
+
+        const renderQuad = renderProgram
+          .makeMesh(4, 2)
+          .setVertex(0, { aPos: screenQuadPositions })
+          .setIndex(0, screenQuadIndices)
+          .update()
+          .setUniforms({ uLastState: buffers[currentBuffer].colorTexture });
+
+        const updateQuad = renderProgram
+          .makeMesh(4, 2)
+          .setVertex(0, { aPos: screenQuadPositions })
+          .setIndex(0, screenQuadIndices)
+          .update()
+          .setUniforms({ uLastState: buffers[currentBuffer].colorTexture });
+
+        const uColor = [1, 0, 0];
+        const pingpongUniforms = buffers.map(({ colorTexture }) => ({
+          uLastState: colorTexture,
+          uColor
+        }));
+
+        const render = time => {
+          uColor[0] = (Math.sin((time / 20 + 0 / 3) * Math.PI * 2) + 1) * 0.5;
+          uColor[1] = (Math.sin((time / 20 + 1 / 3) * Math.PI * 2) + 1) * 0.5;
+          uColor[2] = (Math.sin((time / 20 + 2 / 3) * Math.PI * 2) + 1) * 0.5;
+          modicum.clear(null);
+          renderProgram.activate();
+          renderProgram.drawMesh(
+            renderQuad.setUniforms(pingpongUniforms[currentBuffer])
+          );
+          renderProgram.deactivate();
+        };
+
+        const update = () => {
+          currentBuffer = (currentBuffer + 1) % buffers.length;
+
+          modicum.clear(null, null, buffers[currentBuffer]);
+          updateProgram.activate(buffers[currentBuffer]);
+          updateQuad.setUniforms(pingpongUniforms[1 - currentBuffer]);
+          updateProgram.drawMesh(updateQuad);
+          updateProgram.deactivate();
+        };
+
+        let t = 0;
+        const animator = makeAnimator((time, delta) => {
+          update();
+          render(time);
+        });
+
+        modicum.canvas.width = width;
+        modicum.canvas.height = height;
+        modicum.resize(width, height);
+
+        animator.start();
+      };
+
+      document.addEventListener("touchmove", e => e.preventDefault(), {
+        passive: false
+      });
+    </script>
+  </head>
+</html>

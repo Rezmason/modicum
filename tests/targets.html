@@ -11,6 +11,7 @@
 
       document.body.onload = async () => {
         const modicum = new Modicum(null, {
+          api: "v2Fallback",
           debugger: WebGLDebugUtils.makeDebugContext
         });
         document.body.appendChild(modicum.canvas);
