@@ -15,11 +15,9 @@
       }
     </style>
     <script src="./lib/webgl-debug.js"></script>
-    <script src="./lib/gl-matrix.js"></script>
     <script type="module">
       import Modicum from "./js/modicum.js";
-      import { makeResizer, makeAnimator } from "./js/modicumHelpers.js";
-      const { vec3, mat4 } = glMatrix;
+      import { makeAnimator } from "./js/modicumHelpers.js";
 
       document.body.onload = async () => {
         const modicum = new Modicum(null, {
@@ -198,25 +196,23 @@
           .setVertex(0, { aPos: screenQuadPositions })
           .setIndex(0, screenQuadIndices)
           .update()
-          .setUniforms({ uLastState: buffers[currentBuffer].colorTexture });
+          .setUniforms({
+            uLastState: buffers[currentBuffer].colorTexture,
+            uColor: [0.4, 0.7, 0]
+          });
 
-        const updateQuad = renderProgram
+        const updateQuad = updateProgram
           .makeMesh(4, 2)
           .setVertex(0, { aPos: screenQuadPositions })
           .setIndex(0, screenQuadIndices)
           .update()
           .setUniforms({ uLastState: buffers[currentBuffer].colorTexture });
 
-        const uColor = [1, 0, 0];
         const pingpongUniforms = buffers.map(({ colorTexture }) => ({
-          uLastState: colorTexture,
-          uColor
+          uLastState: colorTexture
         }));
 
         const render = time => {
-          uColor[0] = (Math.sin((time / 20 + 0 / 3) * Math.PI * 2) + 1) * 0.5;
-          uColor[1] = (Math.sin((time / 20 + 1 / 3) * Math.PI * 2) + 1) * 0.5;
-          uColor[2] = (Math.sin((time / 20 + 2 / 3) * Math.PI * 2) + 1) * 0.5;
           modicum.clear(null);
           renderProgram.activate();
           renderProgram.drawMesh(
@@ -235,7 +231,6 @@
           updateProgram.deactivate();
         };
 
-        let t = 0;
         const animator = makeAnimator((time, delta) => {
           update();
           render(time);
