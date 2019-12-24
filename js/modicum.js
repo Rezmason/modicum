@@ -17,11 +17,11 @@ const createFormat = (gl, typeName) => {
     pointerType: gl[pointerType],
     typeName,
     uniformFuncName,
-      stride,
+    stride,
     create: isInt
       ? ({ size }) => new Int32Array(size * stride)
       : ({ size }) => new Float32Array(size * stride),
-      assign: isMat
+    assign: isMat
       ? (l, v) => gl[uniformFuncName](l, false, v)
       : (l, v) => gl[uniformFuncName](l, v)
   };
@@ -90,6 +90,7 @@ class Modicum {
     }
     const gl = this.gl;
     this.defaultTarget = {};
+    this.version = gl.getParameter(gl.VERSION).startsWith("WebGL 2.0") ? 2 : 1;
 
     this.resize();
     this.clear();

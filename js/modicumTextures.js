@@ -96,6 +96,7 @@ class Texture {
       this.isFloat = getParam(params, "isFloat", false);
       this.smooth = getParam(params, "smooth", true);
       this.repeat = getParam(params, "repeat", false);
+      this.flipY = getParam(params, "flipY", false);
       this.numChannels = Math.min(4, getParam(params, "numChannels", 4));
     }
 
@@ -125,8 +126,12 @@ class Texture {
     this.wrappingFunction = this.repeat ? gl.REPEAT : gl.CLAMP_TO_EDGE;
 
     if (this.isFloat) {
-      gl.getExtension("OES_texture_float");
-      gl.getExtension("EXT_float_blend");
+      const version = gl.getParameter(gl.VERSION).startsWith("WebGL 2.0")
+        ? 2
+        : 1;
+      if (version === 1) {
+        gl.getExtension("OES_texture_float");
+      }
       if (this.smooth) {
         gl.getExtension("OES_texture_float_linear");
       }
@@ -142,6 +147,7 @@ class Texture {
       const gl = this.gl;
       const tex2D = gl.TEXTURE_2D;
       gl.bindTexture(tex2D, this.nativeTex);
+      gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, this.flipY);
       if (this.dimensionsChanged) {
         gl.texImage2D(
           tex2D,
@@ -184,8 +190,14 @@ class Target {
     this.nativeFrameBuf = gl.createFramebuffer();
     this.params = params;
     if (getParam(params, "isFloat", false)) {
-      gl.getExtension("WEBGL_color_buffer_float");
-      gl.getExtension("EXT_color_buffer_float");
+      const version = gl.getParameter(gl.VERSION).startsWith("WebGL 2.0")
+        ? 2
+        : 1;
+      if (version === 2) {
+        gl.getExtension("EXT_color_buffer_float");
+      } else {
+        gl.getExtension("WEBGL_color_buffer_float");
+      }
       gl.getExtension("EXT_float_blend");
       // TODO: warn about floating point buffer support with api choice
     }
