@@ -84,8 +84,6 @@ class Modicum {
     const gl = this.gl;
     this.defaultTarget = {};
 
-    gl.enable(gl.BLEND);
-    gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
     this.resize();
     this.clear();
 

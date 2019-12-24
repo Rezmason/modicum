@@ -7,11 +7,16 @@
     <script src="/lib/gl-matrix.js"></script>
     <script type="module">
       import Modicum from "/js/modicum.js";
-      import { makeResizer, makeAnimator } from "/js/modicumHelpers.js";
+      import {
+        makeResizer,
+        makeAnimator,
+        setAlphaBlending
+      } from "/js/modicumHelpers.js";
       const { mat3 } = glMatrix;
 
       document.body.onload = async () => {
         const modicum = new Modicum();
+        setAlphaBlending(modicum);
         document.body.appendChild(modicum.canvas);
 
         const program = await modicum.loadProgram("/shaders/flatshapes.vert");

@@ -5,7 +5,11 @@
 // @yessiree
 
 import Modicum from "./modicum.js";
-import { makeResizer, makeAnimator } from "./modicumHelpers.js";
+import {
+  makeResizer,
+  makeAnimator,
+  setAlphaBlending
+} from "./modicumHelpers.js";
 import SceneNode from "./scenenode.js";
 import Transform from "./transform.js";
 const mat3 = glMatrix.mat3;
@@ -35,6 +39,7 @@ const easeInOutQuad = (x, t, b, c, d) => {
 document.body.onload = async () => {
   const modicum = new Modicum();
   document.body.appendChild(modicum.canvas);
+  setAlphaBlending(modicum);
   const program = await modicum.loadProgram("shaders/flatshapes.vert");
   const scene = program.makeUniformGroup().setUniforms({
     uColorPalette: [

@@ -54,6 +54,13 @@ const setCulling = (modicum, front, back) => {
 const setStandardBlending = modicum => {
   modicum.tweak(gl => {
     gl.enable(gl.BLEND);
+    gl.blendFunc(gl.ONE, gl.ZERO);
+  });
+};
+
+const setAlphaBlending = modicum => {
+  modicum.tweak(gl => {
+    gl.enable(gl.BLEND);
     gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
   });
 };
@@ -126,6 +133,7 @@ export {
   setDepthTest,
   setCulling,
   setStandardBlending,
+  setAlphaBlending,
   setAdditiveBlending,
   loadOBJ
 };
