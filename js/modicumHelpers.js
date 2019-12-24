@@ -127,6 +127,36 @@ const loadOBJ = async url => {
   };
 };
 
+const ogles3Prefix = "#version 300 es";
+const attributeDeclaration = /attribute/g;
+const varyingDeclaration = /varying/g;
+const textureCall = /texture *(2D|Cube)\(/g;
+const fragColorInjectSite = /^(precision.*)$/m;
+const fragColorCall = /gl_FragColor/g;
+
+const upgradeShaderSource = (modicum, vertSource, fragSource) => {
+  if (modicum.version === 2) {
+    if (!vertSource.startsWith(ogles3Prefix)) {
+      vertSource = `${ogles3Prefix}
+        ${vertSource
+          .replace(attributeDeclaration, "in")
+          .replace(varyingDeclaration, "out")
+          .replace(textureCall, "texture(")}`;
+    }
+
+    if (!fragSource.startsWith(ogles3Prefix)) {
+      fragSource = `${ogles3Prefix}
+        ${fragSource
+          .replace(varyingDeclaration, "in")
+          .replace(fragColorInjectSite, "$1\nout vec4 modicum_FragColor;")
+          .replace(textureCall, "texture(")
+          .replace(fragColorCall, "modicum_FragColor")}`;
+    }
+  }
+
+  return [vertSource, fragSource];
+};
+
 export {
   makeResizer,
   makeAnimator,
@@ -135,5 +165,6 @@ export {
   setStandardBlending,
   setAlphaBlending,
   setAdditiveBlending,
-  loadOBJ
+  loadOBJ,
+  upgradeShaderSource
 };
