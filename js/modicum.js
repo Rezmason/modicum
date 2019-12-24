@@ -2,42 +2,49 @@
 // @author Jeremy Sachs
 // @version 2.0.0
 
-const createFormat = (gl, formatName) => {
-  const isFloat = formatName.endsWith("fv");
-  const isMat = formatName.includes("Matrix");
-  const count = parseInt(formatName.charAt(formatName.length - 3));
-  const typeName =
-    (isFloat ? "FLOAT" : "INT") +
-    (count == 1 ? "" : `_${isMat ? "MAT" : "VEC"}${count.toString()}`);
-  const type = gl[typeName];
+const createFormat = (gl, typeName) => {
+  const [pointerType, suffix] = typeName.split("_");
+
+  const isInt = pointerType === "INT";
+  const isMat = suffix != null && suffix.startsWith("MAT");
+  const count = suffix == null ? 1 : parseInt(suffix.charAt(suffix.length - 1));
   const stride = isMat ? count ** 2 : count;
-  return [
-    type,
-    {
-      pointerType: isFloat ? gl.FLOAT : gl.INT,
+  const uniformFuncName = `uniform${isMat ? "Matrix" : ""}${count}${
+    isInt ? "i" : "f"
+  }v`;
+
+  const format = {
+    pointerType: gl[pointerType],
+    typeName,
+    uniformFuncName,
       stride,
-      create: isFloat
-        ? ({ size }) => new Float32Array(size * stride)
-        : ({ size }) => new Int32Array(size * stride),
+    create: isInt
+      ? ({ size }) => new Int32Array(size * stride)
+      : ({ size }) => new Float32Array(size * stride),
       assign: isMat
-        ? (l, v) => gl[formatName](l, false, v)
-        : (l, v) => gl[formatName](l, v)
-    }
-  ];
+      ? (l, v) => gl[uniformFuncName](l, false, v)
+      : (l, v) => gl[uniformFuncName](l, v)
+  };
+
+  return [gl[typeName], format];
 };
 
-const uniformFormatNames = [
-  "uniform1fv",
-  "uniform2fv",
-  "uniform3fv",
-  "uniform4fv",
-  "uniform1iv",
-  "uniform2iv",
-  "uniform3iv",
-  "uniform4iv",
-  "uniformMatrix2fv",
-  "uniformMatrix3fv",
-  "uniformMatrix4fv"
+const typeNames = [
+  "BOOL",
+  "BOOL_VEC2",
+  "BOOL_VEC3",
+  "BOOL_VEC4",
+  "FLOAT",
+  "FLOAT_VEC2",
+  "FLOAT_VEC3",
+  "FLOAT_VEC4",
+  "FLOAT_MAT2",
+  "FLOAT_MAT3",
+  "FLOAT_MAT4",
+  "INT",
+  "INT_VEC2",
+  "INT_VEC3",
+  "INT_VEC4"
 ];
 
 const defaultParams = {
@@ -88,7 +95,7 @@ class Modicum {
     this.clear();
 
     this.formats = Object.fromEntries(
-      uniformFormatNames.map(formatName => createFormat(gl, formatName))
+      typeNames.map(typeName => createFormat(gl, typeName))
     );
   }
 
