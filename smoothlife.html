@@ -50,11 +50,6 @@
 
         const [width, height] = [parameters.WIDTH, parameters.HEIGHT];
 
-        // Create initial conditions
-        const initialState = Array(width * height)
-          .fill()
-          .map(_ => Math.random());
-
         // Initialize buffers
         const buffers = await Promise.all(
           Array(2)
@@ -71,12 +66,6 @@
         );
 
         let currentBuffer = 0;
-
-        buffers[currentBuffer].colorTexture
-          .setData(width, height, initialState)
-          .update();
-        // lowRezNoise.length = 0;
-        initialState.length = 0;
 
         // Pass through vertex shader
         const passThruVS = `
@@ -105,7 +94,16 @@
 
         // Updates the state of a single cell
         const updateStateFS = `
+
+          uniform bool uInitialized;
+
           ${commonFS}
+
+          highp float rand( const in vec2 uv ) {
+            const highp float a = 12.9898, b = 78.233, c = 43758.5453;
+            highp float dt = dot( uv.xy, vec2( a,b ) ), sn = mod( dt, PI );
+            return fract(sin(sn) * c);
+          }
 
           float sigma1(float x, float a, float alpha) {
               return 1.0 / (1.0 + exp(-4.0 * (x - a) / alpha));
@@ -135,6 +133,12 @@
           }
 
           void main(void) {
+
+              if (!uInitialized) {
+                gl_FragColor = vec4(rand(gl_FragCoord.xy / vec2(WIDTH, HEIGHT)), 0., 0., 1.);
+                return;
+              }
+
               const float RI = float(INNER_RADIUS);
               const float RO = float(OUTER_RADIUS);
 
@@ -239,6 +243,10 @@
         modicum.canvas.width = width;
         modicum.canvas.height = height;
         modicum.resize(width, height);
+
+        updateQuad.setUniforms({ uInitialized: [false] });
+        update();
+        updateQuad.setUniforms({ uInitialized: [true] });
 
         animator.start();
       };

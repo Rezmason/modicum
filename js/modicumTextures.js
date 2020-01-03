@@ -28,9 +28,9 @@ const createSamplerFormats = ({ gl }) => ({
   }
 });
 
-const expandData = (data, isFloat, numChannels) => {
+const expandData = (data, isByte, numChannels) => {
   if (numChannels === 4) return data;
-  const alpha = isFloat ? 1 : 0xff;
+  const alpha = isByte ? 0xff : 1;
 
   const remainder = Array(4 - numChannels).fill(0);
   remainder[remainder.length - 1] = alpha;
@@ -45,7 +45,9 @@ const expandData = (data, isFloat, numChannels) => {
 };
 
 const loadImageTexture = async (gl, imageURL, params = null) => {
-  const isFloat = getParam(params, "isFloat", false);
+  const isFloat =
+    getParam(params, "isFloat", false) ||
+    getParam(params, "isHalfFloat", false);
   const numChannels = Math.min(4, getParam(params, "numChannels", 4));
   const image = new Image();
   image.src = imageURL;
@@ -66,11 +68,64 @@ const loadImageTexture = async (gl, imageURL, params = null) => {
 
 const isPowerOfTwo = x => (x & (x - 1)) == 0;
 
+/**
+ * Practically carbon copied from Jeroen van der Zijp's paper:
+ * ftp://ftp.fox-toolkit.org/pub/fasthalffloatconversion.pdf
+ **/
+
+const baseTable = [];
+const shiftTable = [];
+
+for (let i = 0; i < 256; i++) {
+  const e = i - 127;
+  if (e < -24) {
+    baseTable[i | 0x100] = 0x8000;
+    shiftTable[i | 0x000] = 24;
+    shiftTable[i | 0x100] = 24;
+  } else if (e < -14) {
+    // Small numbers map to denorms
+    baseTable[i | 0x000] = 0x0400 >> (-e - 14);
+    baseTable[i | 0x100] = (0x0400 >> (-e - 14)) | 0x8000;
+    shiftTable[i | 0x000] = -e - 1;
+    shiftTable[i | 0x100] = -e - 1;
+  } else if (e <= 15) {
+    // Normal numbers just lose precision
+    baseTable[i | 0x000] = (e + 15) << 10;
+    baseTable[i | 0x100] = ((e + 15) << 10) | 0x8000;
+    shiftTable[i | 0x000] = 13;
+    shiftTable[i | 0x100] = 13;
+  } else if (e < 128) {
+    // Large numbers map to Infinity
+    baseTable[i | 0x000] = 0x7c00;
+    baseTable[i | 0x100] = 0xfc00;
+    shiftTable[i | 0x000] = 24;
+    shiftTable[i | 0x100] = 24;
+  } else {
+    // Infinity and NaN's stay Infinity and NaNs
+    baseTable[i | 0x000] = 0x7c00;
+    baseTable[i | 0x100] = 0xfc00;
+    shiftTable[i | 0x000] = 13;
+    shiftTable[i | 0x100] = 13;
+  }
+}
+
+const hfBuf = new ArrayBuffer(4);
+const hfFloat = new Float32Array(hfBuf);
+const hfUint = new Uint32Array(hfBuf);
+
+const floatToHalfFloat = float => {
+  hfFloat[0] = float;
+  const floatRep = hfUint[0];
+  const index = (floatRep >> 23) & 0x1ff;
+  return baseTable[index] + ((floatRep & 0x007fffff) >> shiftTable[index]);
+};
+
 class Texture {
   constructor(gl, width, height, data, params) {
     this.gl = gl;
     this.nativeTex = gl.createTexture();
     this.isFloat = false;
+    this.isHalfFloat = false;
     this.smooth = true;
     this.repeat = false;
     this.numChannels = 4;
@@ -94,6 +149,7 @@ class Texture {
 
     if (params != null) {
       this.isFloat = getParam(params, "isFloat", false);
+      this.isHalfFloat = getParam(params, "isHalfFloat", false);
       this.smooth = getParam(params, "smooth", true);
       this.repeat = getParam(params, "repeat", false);
       this.flipY = getParam(params, "flipY", false);
@@ -103,9 +159,14 @@ class Texture {
     if (data == null) {
       this.data = null;
     } else {
+      const isByte = !(this.isFloat || this.isHalfFloat);
       this.data = this.isFloat
-        ? Float32Array.from(expandData(data, this.isFloat, this.numChannels))
-        : Uint8Array.from(expandData(data, this.isFloat, this.numChannels));
+        ? Float32Array.from(expandData(data, isByte, this.numChannels))
+        : this.isHalfFloat
+        ? Uint16Array.from(
+            expandData(data, isByte, this.numChannels).map(floatToHalfFloat)
+          )
+        : Uint8Array.from(expandData(data, isByte, this.numChannels));
     }
 
     if (this.repeat && !(isPowerOfTwo(width) && isPowerOfTwo(height))) {
@@ -118,13 +179,12 @@ class Texture {
     this.level = 0;
     this.internalFormat = this.isFloat
       ? gl[["RGBA32F", "RGBA"].find(format => gl[format] != null)]
+      : this.isHalfFloat
+      ? gl[["RGBA16F", "RGBA"].find(format => gl[format] != null)]
       : gl.RGBA;
     this.format = gl.RGBA;
-    this.type = this.isFloat ? gl.FLOAT : gl.UNSIGNED_BYTE;
 
-    this.filter = this.smooth ? gl.LINEAR : gl.NEAREST;
-    this.wrappingFunction = this.repeat ? gl.REPEAT : gl.CLAMP_TO_EDGE;
-
+    let halfFloatType;
     if (this.isFloat) {
       const version = gl.getParameter(gl.VERSION).startsWith("WebGL 2.0")
         ? 2
@@ -135,7 +195,30 @@ class Texture {
       if (this.smooth) {
         gl.getExtension("OES_texture_float_linear");
       }
+    } else if (this.isHalfFloat) {
+      const version = gl.getParameter(gl.VERSION).startsWith("WebGL 2.0")
+        ? 2
+        : 1;
+      if (version === 1) {
+        gl.getExtension("EXT_color_buffer_half_float");
+        const ext = gl.getExtension("OES_texture_half_float");
+        halfFloatType = ext.HALF_FLOAT_OES;
+      } else {
+        halfFloatType = gl.HALF_FLOAT;
+      }
+      if (this.smooth) {
+        gl.getExtension("OES_texture_half_float_linear");
+      }
     }
+
+    this.type = this.isFloat
+      ? gl.FLOAT
+      : this.isHalfFloat
+      ? halfFloatType
+      : gl.UNSIGNED_BYTE;
+
+    this.filter = this.smooth ? gl.LINEAR : gl.NEAREST;
+    this.wrappingFunction = this.repeat ? gl.REPEAT : gl.CLAMP_TO_EDGE;
 
     this.dirty = true;
     return this;
@@ -189,7 +272,10 @@ class Target {
     this.gl = gl;
     this.nativeFrameBuf = gl.createFramebuffer();
     this.params = params;
-    if (getParam(params, "isFloat", false)) {
+    if (
+      getParam(params, "isFloat", false) ||
+      getParam(params, "isHalfFloat", false)
+    ) {
       const version = gl.getParameter(gl.VERSION).startsWith("WebGL 2.0")
         ? 2
         : 1;
